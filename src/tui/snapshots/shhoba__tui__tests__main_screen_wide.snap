@@ -1,0 +1,20 @@
+---
+source: src/tui/tests.rs
+expression: "render(&h.app, 100, 16)"
+---
+ shhoba ─ 3 servers ─ terminal
+ / to search
+╭─────────────────────────────────────────────────────╮╭───────────────────────────────────────────╮
+│  ▾ personal  1                                      ││atasoy                                     │
+│❯   atasoy                                           ││home.example.com                           │
+│  ▾ work  2                                          ││group: personal                            │
+│    db-prod ★ db prod  via bastion                   ││                                           │
+│    bastion   infra                                  ││$ ssh home.example.com                     │
+│                                                     ││                                           │
+│                                                     ││                                           │
+│                                                     ││                                           │
+│                                                     ││                                           │
+│                                                     ││                                           │
+│                                                     ││                                           │
+╰─────────────────────────────────────────────────────╯╰───────────────────────────────────────────╯
+ / search  ⏎ connect  a add  e edit  d del  p ping  t tunnels  f files  ? help

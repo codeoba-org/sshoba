@@ -1,0 +1,14 @@
+---
+source: src/tui/tests.rs
+expression: "render(&h.app, 80, 10)"
+---
+ shhoba ─ 0 servers ─ terminal
+ / to search
+╭──────────────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│                                No servers yet                                │
+│                                                                              │
+│               press a to add one, or I to import ~/.ssh/config               │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ / search  ⏎ connect  a add  e edit  d del  p ping  t tunnels  f files  ? help

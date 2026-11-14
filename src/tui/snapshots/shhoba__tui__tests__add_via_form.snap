@@ -1,0 +1,34 @@
+---
+source: src/tui/tests.rs
+expression: "render(&h.app, 100, 30)"
+---
+ shhoba ─ 3 servers ─ terminal
+ / to search
+╭─────────────────────────────────────────────────────╮╭───────────────────────────────────────────╮
+│  ▾ personal  ╭ Add server ────────────────────────────────────────────────────────╮              │
+│❯   atasoy    │  name web                                                          │              │
+│  ▾ work  2   │                                                                    │              │
+│    db-prod ★ │  host 1.2.3.4                                                      │              │
+│    bastion   │                                                                    │              │
+│              │  user me                                                           │              │
+│              │                                                                    │              │
+│              │  port 2200                                                         │              │
+│              │                                                                    │              │
+│              │   key ~/.ssh/id_ed25519 (Tab completes)                            │              │
+│              │                                                                    │              │
+│              │  jump jump hosts in order, comma-separated                         │              │
+│              │                                                                    │              │
+│              │ group optional                                                     │              │
+│              │                                                                    │              │
+│              │  tags comma-separated                                              │              │
+│              │                                                                    │              │
+│              │  note optional                                                     │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              ╰ Tab next · ⇧Tab prev · Ctrl+S save · Esc cancel ───────────────────╯              │
+│                                                     ││                                           │
+╰─────────────────────────────────────────────────────╯╰───────────────────────────────────────────╯
+ / search  ⏎ connect  a add  e edit  d del  p ping  t tunnels  f files  ? help

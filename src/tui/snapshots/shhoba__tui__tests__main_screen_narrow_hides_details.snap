@@ -1,0 +1,16 @@
+---
+source: src/tui/tests.rs
+expression: "render(&h.app, 70, 12)"
+---
+ shhoba ─ 3 servers ─ terminal
+ / to search
+╭────────────────────────────────────────────────────────────────────╮
+│  ▾ personal  1                                                     │
+│❯   atasoy                                                          │
+│  ▾ work  2                                                         │
+│    db-prod ★ db prod  via bastion                                  │
+│    bastion   infra                                                 │
+│                                                                    │
+│                                                                    │
+╰────────────────────────────────────────────────────────────────────╯
+ / search  ⏎ connect  a add  e edit  d del  p ping  t tunnels  f files
