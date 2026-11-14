@@ -128,7 +128,20 @@ pub fn connect_argv(
     } else {
         Vec::new()
     };
-    Ok(sshcmd::ssh_connect(&ctx, server, &fwds))
+    let argv = sshcmd::ssh_connect(&ctx, server, &fwds);
+    if !crate::core::password::chain_has_saved(cfg, server) {
+        return Ok(argv);
+    }
+    // `env` keeps the variables attached to ssh even when a tmux/Zellij/kitty/WezTerm
+    // server, not this process, starts it.
+    let mut v = vec!["env".to_string()];
+    v.extend(
+        crate::core::password::askpass_env(paths, true)?
+            .into_iter()
+            .map(|(k, val)| format!("{k}={val}")),
+    );
+    v.extend(argv);
+    Ok(v)
 }
 
 pub fn tmux_args(name: &str, argv: &[String]) -> Vec<String> {

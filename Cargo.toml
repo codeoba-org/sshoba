@@ -17,7 +17,7 @@ chrono = { version = "0.4.45", features = ["serde", "clock"] }
 clap = { version = "4.6.7", features = ["derive", "env"] }
 clap_complete = { version = "4.6.11", features = ["unstable-dynamic"] }
 directories = "6.0.0"
-nix = { version = "0.31.3", features = ["signal", "process", "fs"] }
+nix = { version = "0.31.3", features = ["signal", "process", "fs", "term"] }
 nucleo-matcher = "0.3.1"
 ratatui = "0.30.2"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -30,6 +30,14 @@ toml = "1.2.1"
 toml_edit = "0.25.19"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+# Saved passwords live in the OS keychain, never in servers.toml.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Secret Service over pure-Rust D-Bus: no libdbus needed at build time.
+keyring = { version = "3.6.3", features = ["async-secret-service", "async-io", "crypto-rust"] }
 
 [dev-dependencies]
 assert_cmd = "2.2.2"

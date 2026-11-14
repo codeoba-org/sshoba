@@ -45,6 +45,23 @@ Choices made where the build plan was silent or left a question open.
   `show` prints both it and the readable `-J` form.
 - The readable command expands `~` in key paths so it works when pasted into a shell.
 
+## Saved passwords
+
+- **OS keychain only** (`keyring` crate: Security framework on macOS, pure-Rust Secret
+  Service on Linux). Nothing password-related is written to servers.toml or state.
+- **Keyed by `user@host`**, the text ssh puts in its prompt, so a password is only ever
+  sent to the destination it was saved for (renaming or deleting a server cannot leak
+  it to another host). Without `user`, `$USER` is assumed.
+- ssh gets it via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`, only when the target or
+  a hop has a saved password. `SSH_ASKPASS` takes no arguments, so sshoba writes
+  `<state>/askpass`, a script running `sshoba askpass "$1"`. Connect argv is prefixed
+  with `env ...` so the variables survive tmux/Zellij/kitty/WezTerm spawning ssh.
+- The helper answers each ssh process once per destination (marker file per parent
+  pid in `<state>/askpass.d`); a second prompt means the password was rejected and goes
+  to the terminal, so a stale password never loops into a lockout. Other prompts
+  (host keys, key passphrases, OTP) are asked on `/dev/tty`; detached tunnels set
+  `SSHOBA_ASKPASS_NOTTY` and drop `BatchMode` so they fail instead of prompting.
+
 ## Launching
 
 - **tmux wins over Zellij** when both `$TMUX` and `$ZELLIJ` are set.

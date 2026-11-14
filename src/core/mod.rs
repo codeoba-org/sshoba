@@ -5,6 +5,7 @@ pub mod error;
 pub mod fsutil;
 pub mod launcher;
 pub mod model;
+pub mod password;
 pub mod paths;
 pub mod ping;
 pub mod remote_fs;

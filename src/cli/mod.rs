@@ -181,8 +181,32 @@ pub enum Command {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    /// Save or delete a server's password in the OS keychain.
+    Password {
+        #[command(subcommand)]
+        command: PasswordCommand,
+    },
     /// Print a shell completion script.
     Completions { shell: Shell },
+    /// ssh's SSH_ASKPASS helper (used internally).
+    #[command(hide = true)]
+    Askpass { prompt: String },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PasswordCommand {
+    /// Save the password (asked without echo, or read from stdin) in the OS keychain.
+    /// sshoba then logs in with it, also for background tunnels. It is stored per
+    /// user@host and never written to servers.toml.
+    Set {
+        #[arg(add = servers())]
+        name: String,
+    },
+    /// Delete the saved password.
+    Rm {
+        #[arg(add = servers())]
+        name: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]

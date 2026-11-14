@@ -15,8 +15,9 @@ files with one keypress or one command.
 
 sshoba never implements SSH itself: it runs your system `ssh`, `scp`, `rsync` and `sftp`,
 so keys, ssh-agent, `known_hosts`, `~/.ssh/config` and ControlMaster keep working. It
-never edits `~/.ssh/config` and never stores passwords (password logins still work,
-because ssh asks in the terminal).
+never edits `~/.ssh/config` and never writes passwords to its files: password logins
+work as usual (ssh asks in the terminal), or you can save a password in the OS keychain
+with `sshoba password set <name>` so sshoba logs in for you.
 
 ## Install
 
@@ -259,11 +260,20 @@ Set `SSHOBA_LOG=debug` for more detail. Background tunnels log to
 
 ## FAQ
 
+**Can sshoba remember my password?**
+Yes: `sshoba password set <name>` asks for it once and stores it in the macOS Keychain
+(or the Secret Service, e.g. GNOME Keyring, on Linux), keyed by `user@host`. Connects
+(CLI and TUI) and background tunnels then log in with it through ssh's `SSH_ASKPASS`;
+jump hops with a saved password work too. If the server rejects it, ssh asks in the
+terminal as usual. `sshoba password rm <name>` deletes it. Requires OpenSSH 8.4 or
+newer. An SSH key (`ssh-copy-id`) is still the safer and faster option when you can
+use one.
+
 **My server only accepts passwords. Can I use tunnels?**
-Background tunnels run with `BatchMode=yes`, so they need key or ssh-agent
-authentication. For password servers, mark the forwards `auto = true` and connect with
-`sshoba c <name> --with-forwards` (or `o` in the TUI): the forwards then run inside your
-interactive session, where ssh can ask for the password.
+Yes, if you save the password (see above). Otherwise background tunnels run with
+`BatchMode=yes` and need key or ssh-agent authentication: mark the forwards
+`auto = true` and connect with `sshoba c <name> --with-forwards` (or `o` in the TUI) so
+the forwards run inside your interactive session, where ssh can ask for the password.
 
 **A background command says "host key not verified".**
 Connect once interactively (`sshoba c <name>`) and accept the host key. sshoba never

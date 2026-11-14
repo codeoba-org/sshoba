@@ -2,7 +2,8 @@
 
 use crate::cli::output::{self, paint, print_json, ServerJson, ShowJson, Style, Table};
 use crate::cli::{
-    Cli, Command, ConfigCommand, ExportCommand, FwdCommand, ImportCommand, Shell, TunnelCommand,
+    Cli, Command, ConfigCommand, ExportCommand, FwdCommand, ImportCommand, PasswordCommand, Shell,
+    TunnelCommand,
 };
 use crate::core::config::{self, ConfigStore};
 use crate::core::error::{suggest, Error, Result};
@@ -114,6 +115,8 @@ fn dispatch(ctx: &Ctx, cmd: Command) -> Result<i32> {
             Ok(0)
         }
         Command::Completions { shell } => completions(shell),
+        Command::Password { command } => password(ctx, command),
+        Command::Askpass { prompt } => Ok(crate::core::password::run_askpass(&prompt, &ctx.paths)),
         Command::Ping { queries, all, json } => ping(ctx, &queries, all, json),
         Command::Fwd { command } => fwd(ctx, command),
         Command::Send { server, paths } => transfer_cmd(ctx, &server, Direction::Send, paths),
@@ -191,6 +194,48 @@ fn connect(ctx: &Ctx, query: &str, mode: LaunchMode, with_forwards: bool) -> Res
             Err(launcher::exec(&argv))
         }
     }
+}
+
+fn password(ctx: &Ctx, cmd: PasswordCommand) -> Result<i32> {
+    use crate::core::password;
+    let store = ctx.store()?;
+    let name = match &cmd {
+        PasswordCommand::Set { name } | PasswordCommand::Rm { name } => name,
+    };
+    let server = resolve::require(&store.config, name)?;
+    let key = password::key_for(server).ok_or_else(|| {
+        Error::other(format!(
+            "\"{}\" has no user and $USER is not set; set one with `sshoba set {} user <name>`",
+            server.name, server.name
+        ))
+    })?;
+    match cmd {
+        PasswordCommand::Set { .. } => {
+            let pw = if std::io::stdin().is_terminal() {
+                password::read_tty(&format!("Password for {key}: "), false)
+                    .map_err(|e| Error::io("read password", e))?
+            } else {
+                let mut line = String::new();
+                std::io::stdin()
+                    .read_line(&mut line)
+                    .map_err(|e| Error::io("read password from stdin", e))?;
+                line.trim_end_matches(['\r', '\n']).to_string()
+            };
+            if pw.is_empty() {
+                return Err(Error::other("empty password, nothing saved"));
+            }
+            password::set(&key, &pw)?;
+            ctx.note(format!("Saved the password for {key} in the keychain"));
+        }
+        PasswordCommand::Rm { .. } => {
+            if password::delete(&key)? {
+                ctx.note(format!("Deleted the saved password for {key}"));
+            } else {
+                ctx.note(format!("No saved password for {key}"));
+            }
+        }
+    }
+    Ok(0)
 }
 
 fn list(

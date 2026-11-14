@@ -131,15 +131,21 @@ pub fn ssh_connect(ctx: &SshCtx, server: &Server, forwards: &[&Forward]) -> Vec<
     v
 }
 
-/// Background tunnel for one forward (section 7.4).
-pub fn ssh_tunnel(ctx: &SshCtx, server: &Server, fwd: &Forward) -> Vec<String> {
+/// Background tunnel for one forward (section 7.4). Without `batch` ssh may use a saved
+/// password through `SSH_ASKPASS` (see [`crate::core::password`]).
+pub fn ssh_tunnel(ctx: &SshCtx, server: &Server, fwd: &Forward, batch: bool) -> Vec<String> {
     let mut v = ctx.base();
     v.push("-N".into());
+    let batch = if batch {
+        "BatchMode=yes"
+    } else {
+        "BatchMode=no"
+    };
     for o in [
         "ExitOnForwardFailure=yes",
         "ServerAliveInterval=30",
         "ServerAliveCountMax=3",
-        "BatchMode=yes",
+        batch,
         "ControlPath=none",
     ] {
         v.push("-o".into());
@@ -440,7 +446,7 @@ extra_args = ["-o", "ServerAliveInterval=30"]
         insta::assert_debug_snapshot!((
             ssh_connect(&ctx(), db, &[]),
             ssh_connect(&ctx(), db, &[pg]),
-            ssh_tunnel(&ctx(), db, db.forward("socks").unwrap()),
+            ssh_tunnel(&ctx(), db, db.forward("socks").unwrap(), true),
             ssh_check(&ctx(), db),
             ssh_check(&ctx(), cfg.get("bastion").unwrap()),
         ));

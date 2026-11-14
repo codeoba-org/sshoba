@@ -97,7 +97,8 @@ pub fn start(cfg: &Config, paths: &Paths, server: &Server, fwd: &Forward) -> Res
     }
     crate::core::launcher::require_bin(&cfg.settings.ssh_bin, "install OpenSSH")?;
     let ctx = sshcmd::ensure_ssh_config(cfg, paths)?;
-    let argv = sshcmd::ssh_tunnel(&ctx, server, fwd);
+    let use_password = crate::core::password::chain_has_saved(cfg, server);
+    let argv = sshcmd::ssh_tunnel(&ctx, server, fwd, !use_password);
     private_dir(&paths.tunnels_dir())?;
     let log = log_path(paths, &server.name, &fwd.name);
     let log_file = {
@@ -115,6 +116,9 @@ pub fn start(cfg: &Config, paths: &Paths, server: &Server, fwd: &Forward) -> Res
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::from(log_file));
+    if use_password {
+        cmd.envs(crate::core::password::askpass_env(paths, false)?);
+    }
     {
         use std::os::unix::process::CommandExt;
         // A new session detaches the tunnel from our terminal and process group, so it
