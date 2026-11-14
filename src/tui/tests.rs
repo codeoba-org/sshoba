@@ -352,3 +352,71 @@ fn toggle_tunnel_up_and_down() {
     h.app.update(ev);
     assert!(h.app.running_tunnel("s/r").is_none());
 }
+
+#[test]
+fn transfer_dialog_send_via_rsync() {
+    use crate::tui::views::transfer::Step;
+    use std::os::unix::fs::PermissionsExt;
+    if crate::core::launcher::which("rsync").is_none() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let remote = dir.path().join("remote");
+    std::fs::create_dir_all(&remote).unwrap();
+    let fake = dir.path().join("fake-ssh");
+    std::fs::write(
+        &fake,
+        format!(
+            "#!/bin/sh\nshift 3\ncd '{}' || exit 1\nexec sh -c \"$*\"\n",
+            remote.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let src = dir.path().join("payload.bin");
+    std::fs::write(&src, vec![7u8; 4096]).unwrap();
+    let mut h = harness(&format!(
+        "[settings]\nssh_bin = \"{}\"\ntransfer_tool = \"rsync\"\ncontrol_master = false\nping_interval = 0\n[[server]]\nname = \"box\"\nhost = \"h\"\n",
+        fake.display()
+    ));
+    key(&mut h.app, KeyCode::Char('x'));
+    key(&mut h.app, KeyCode::Char('s'));
+    h.app.update(Event::Paste(src.display().to_string()));
+    key(&mut h.app, KeyCode::Enter);
+    let screen = render(&h.app, 80, 14);
+    assert!(
+        screen.contains("Send to box") && screen.contains("remote dir"),
+        "{screen}"
+    );
+    key(&mut h.app, KeyCode::Enter); // start; runs synchronously without a runtime
+    while let Ok(ev) = h.rx.try_recv() {
+        h.app.update(ev);
+    }
+    match &h.app.modal {
+        Some(Modal::Transfer(t)) => assert_eq!(t.step, Step::Done(Ok(())), "{:?}", t.step),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(
+        std::fs::read(remote.join("payload.bin")).unwrap().len(),
+        4096
+    );
+    key(&mut h.app, KeyCode::Char('z'));
+    assert!(h.app.modal.is_none());
+}
+
+#[test]
+fn transfer_dialog_missing_source() {
+    use crate::tui::views::transfer::Step;
+    let mut h = harness(FIXTURE);
+    key(&mut h.app, KeyCode::Char('x'));
+    key(&mut h.app, KeyCode::Char('s'));
+    typ(&mut h.app, "/definitely/not/here");
+    key(&mut h.app, KeyCode::Enter);
+    key(&mut h.app, KeyCode::Enter);
+    match &h.app.modal {
+        Some(Modal::Transfer(t)) => {
+            assert!(matches!(&t.step, Step::Done(Err(e)) if e.contains("not/here")))
+        }
+        other => panic!("{other:?}"),
+    }
+}

@@ -99,3 +99,17 @@ Choices made where the build plan was silent or left a question open.
 - `fwd rm` stops the forward's tunnel first if it is running.
 - TUI add-forward uses one prompt: `name -L|-R|-D spec [auto]`.
 - Local-port checks bind `bind` (default 127.0.0.1); `*` checks 0.0.0.0.
+
+## Transfers
+
+- macOS ships openrsync ("rsync version 2.6.9 compatible"): no `--info=progress2` or
+  `--protect-args`. We then use `--progress` (per-file lines) and shell-quote remote
+  paths ourselves, which keeps paths with spaces working (tested end to end through a
+  fake ssh that runs the remote command in a shell, as sshd does).
+- `--protect-args` is used from rsync 3.0, `--info=progress2` from 3.1.
+- Remote paths are relative to the home directory; a leading `~/` is stripped because
+  `~` is not expanded under `--protect-args`. The default remote dir is home.
+- CLI argument split: with two or more paths, `send`'s last path is the remote dir unless
+  it exists locally; `get`'s last path is the local dir if it is an existing directory.
+- The quick-transfer dialog is on `x`; `f` opens the two-pane file browser (phase 6).
+- scp is used without progress parsing (spinner and elapsed time only).

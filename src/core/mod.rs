@@ -11,4 +11,5 @@ pub mod resolve;
 pub mod sshcmd;
 pub mod sshconfig;
 pub mod state;
+pub mod transfer;
 pub mod tunnel;

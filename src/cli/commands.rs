@@ -8,7 +8,7 @@ use crate::core::launcher::{self, LaunchMode, Target};
 use crate::core::model::{parse_destination, Server};
 use crate::core::paths::Paths;
 use crate::core::resolve::{self, Lookup};
-use crate::core::sshcmd;
+use crate::core::sshcmd::{self, Direction};
 use crate::core::state::State;
 use std::io::{IsTerminal, Write};
 
@@ -114,6 +114,8 @@ fn dispatch(ctx: &Ctx, cmd: Command) -> Result<i32> {
         Command::Completions { shell } => completions(shell),
         Command::Ping { queries, all, json } => ping(ctx, &queries, all, json),
         Command::Fwd { command } => fwd(ctx, command),
+        Command::Send { server, paths } => transfer_cmd(ctx, &server, Direction::Send, paths),
+        Command::Get { server, paths } => transfer_cmd(ctx, &server, Direction::Get, paths),
         Command::Tunnel { command } => tunnel(ctx, command),
         Command::Import {
             command: ImportCommand::SshConfig { file, dry_run },
@@ -739,4 +741,64 @@ fn tunnel(ctx: &Ctx, command: TunnelCommand) -> Result<i32> {
             Ok(0)
         }
     }
+}
+
+/// Split CLI paths into sources and destination (see `send`/`get` help).
+pub fn split_transfer_paths(dir: Direction, mut paths: Vec<String>) -> (Vec<String>, String) {
+    let default = match dir {
+        Direction::Send => "~",
+        Direction::Get => ".",
+    };
+    if paths.len() >= 2 {
+        let last = paths.last().expect("len >= 2");
+        let is_dest = match dir {
+            Direction::Send => std::fs::symlink_metadata(last).is_err(),
+            Direction::Get => std::path::Path::new(last).is_dir(),
+        };
+        if is_dest {
+            let dest = paths.pop().expect("len >= 2");
+            return (paths, dest);
+        }
+    }
+    (paths, default.to_string())
+}
+
+fn transfer_cmd(ctx: &Ctx, server: &str, dir: Direction, paths: Vec<String>) -> Result<i32> {
+    use crate::core::transfer;
+    let store = ctx.store()?;
+    let s = resolve::require(&store.config, server)?;
+    let (srcs, dest) = split_transfer_paths(dir, paths);
+    let plan = transfer::plan(&store.config, &ctx.paths, s, dir, &srcs, &dest)?;
+    tracing::info!("transfer: {}", sshcmd::shell_join(&plan.argv));
+    let show = std::io::stderr().is_terminal() && !ctx.quiet;
+    let (from, to) = match dir {
+        Direction::Send => (srcs.join(" "), format!("{}:{dest}", s.name)),
+        Direction::Get => (format!("{}:{}", s.name, srcs.join(" ")), dest.clone()),
+    };
+    if show {
+        let tool = match plan.tool {
+            transfer::Tool::Rsync(_) => "rsync",
+            transfer::Tool::Scp => "scp",
+        };
+        eprintln!("{from} → {to} ({tool})");
+    }
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    transfer::run(&plan, cancel, |p| {
+        if show {
+            let file = p
+                .file
+                .as_deref()
+                .map(|f| format!("  {f}"))
+                .unwrap_or_default();
+            eprint!(
+                "\r\x1b[2K{:>3}%  {:>12} B  {}  ETA {}{file}",
+                p.percent, p.bytes, p.rate, p.eta
+            );
+            let _ = std::io::stderr().flush();
+        }
+    })?;
+    if show {
+        eprintln!("\r\x1b[2KDone.");
+    }
+    Ok(0)
 }

@@ -146,6 +146,26 @@ pub enum Command {
         #[command(subcommand)]
         command: TunnelCommand,
     },
+    /// Upload files: `send <server> <local>... [<remote_dir>]` (remote dir default `~`).
+    ///
+    /// With two or more paths, the last one is the remote directory unless it exists
+    /// locally.
+    Send {
+        #[arg(add = servers())]
+        server: String,
+        #[arg(required = true, value_name = "PATH")]
+        paths: Vec<String>,
+    },
+    /// Download files: `get <server> <remote>... [<local_dir>]` (local dir default `.`).
+    ///
+    /// With two or more paths, the last one is the local directory if it is an existing
+    /// directory.
+    Get {
+        #[arg(add = servers())]
+        server: String,
+        #[arg(required = true, value_name = "PATH")]
+        paths: Vec<String>,
+    },
     /// Import servers from another format.
     Import {
         #[command(subcommand)]

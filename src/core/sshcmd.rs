@@ -171,6 +171,144 @@ pub fn ssh_check(ctx: &SshCtx, server: &Server) -> Option<Vec<String>> {
     Some(v)
 }
 
+/// Transfer direction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    /// Local → remote.
+    Send,
+    /// Remote → local.
+    Get,
+}
+
+/// What the installed rsync supports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RsyncCaps {
+    /// `--info=progress2` (rsync ≥ 3.1).
+    pub progress2: bool,
+    /// `--protect-args` (rsync ≥ 3.0); without it remote paths are shell-quoted by us.
+    pub protect_args: bool,
+}
+
+/// Remote path as `shhoba.<name>:<path>`. A leading `~/` (or `~`) is dropped: remote
+/// paths are relative to the home directory, and `~` is not expanded with protect-args.
+fn remote_spec(server: &Server, path: &str, quote: bool) -> String {
+    let p = path
+        .strip_prefix("~/")
+        .or_else(|| (path == "~").then_some(""))
+        .unwrap_or(path);
+    let p = if quote && !p.is_empty() {
+        shell_escape::unix::escape(p.into()).into_owned()
+    } else {
+        p.to_string()
+    };
+    format!("{}:{p}", alias(&server.name))
+}
+
+/// `scp -F <file> -r <srcs> <dest>`; remote side is `shhoba.<name>:path`.
+pub fn scp_args(
+    ctx: &SshCtx,
+    server: &Server,
+    dir: Direction,
+    srcs: &[String],
+    dest: &str,
+) -> Vec<String> {
+    let scp = scp_bin(&ctx.ssh_bin);
+    let mut v = vec![
+        scp,
+        "-F".into(),
+        ctx.config_file.display().to_string(),
+        "-r".into(),
+    ];
+    match dir {
+        Direction::Send => {
+            v.extend(srcs.iter().cloned());
+            v.push(remote_spec(server, dest, false));
+        }
+        Direction::Get => {
+            v.extend(srcs.iter().map(|s| remote_spec(server, s, false)));
+            v.push(dest.to_string());
+        }
+    }
+    v
+}
+
+/// scp/sftp live next to a custom ssh binary; otherwise use PATH.
+fn scp_bin(ssh_bin: &str) -> String {
+    sibling(ssh_bin, "scp")
+}
+
+fn sibling(ssh_bin: &str, tool: &str) -> String {
+    match Path::new(ssh_bin).parent() {
+        Some(dir) if ssh_bin.contains('/') => dir.join(tool).display().to_string(),
+        _ => tool.to_string(),
+    }
+}
+
+/// `rsync -az --partial ... -e "ssh -F <file>" <srcs> <dest>`.
+pub fn rsync_args(
+    ctx: &SshCtx,
+    server: &Server,
+    dir: Direction,
+    srcs: &[String],
+    dest: &str,
+    caps: RsyncCaps,
+) -> Vec<String> {
+    let mut v: Vec<String> = vec!["rsync".into(), "-az".into(), "--partial".into()];
+    if caps.progress2 {
+        v.push("--info=progress2".into());
+    } else {
+        v.push("--progress".into());
+    }
+    if caps.protect_args {
+        v.push("--protect-args".into());
+    }
+    v.push("-e".into());
+    v.push(format!(
+        "{} -F {}",
+        shell_quote(&ctx.ssh_bin),
+        shell_quote(&ctx.config_file.display().to_string())
+    ));
+    let quote = !caps.protect_args;
+    match dir {
+        Direction::Send => {
+            v.extend(srcs.iter().cloned());
+            v.push(remote_spec(server, dest, quote));
+        }
+        Direction::Get => {
+            v.extend(srcs.iter().map(|s| remote_spec(server, s, quote)));
+            v.push(dest.to_string());
+        }
+    }
+    v
+}
+
+/// `sftp -F <file> -b - shhoba.<name>` (commands on stdin).
+pub fn sftp_batch(ctx: &SshCtx, server: &Server) -> Vec<String> {
+    vec![
+        sibling(&ctx.ssh_bin, "sftp"),
+        "-F".into(),
+        ctx.config_file.display().to_string(),
+        "-b".into(),
+        "-".into(),
+        alias(&server.name),
+    ]
+}
+
+/// Run a command on the server over the shared ControlMaster connection.
+/// `remote` is a single shell command string (already quoted).
+pub fn ssh_exec(ctx: &SshCtx, server: &Server, remote: &str) -> Vec<String> {
+    let mut v = ctx.base();
+    for o in ["BatchMode=yes", "ConnectTimeout=10"] {
+        v.push("-o".into());
+        v.push(o.into());
+    }
+    v.extend(server.extra_args.iter().cloned());
+    v.push(alias(&server.name));
+    v.push("--".into());
+    v.push(remote.to_string());
+    v
+}
+
 /// Quote one argument for a POSIX shell, leaving common safe strings bare.
 pub fn shell_quote(a: &str) -> String {
     let safe = |c: char| c.is_ascii_alphanumeric() || "@%+=:,./_-".contains(c);
@@ -305,6 +443,32 @@ extra_args = ["-o", "ServerAliveInterval=30"]
             ssh_tunnel(&ctx(), db, db.forward("socks").unwrap()),
             ssh_check(&ctx(), db),
             ssh_check(&ctx(), cfg.get("bastion").unwrap()),
+        ));
+    }
+
+    #[test]
+    fn transfer_argv() {
+        let cfg = parse(FIXTURE, "t").unwrap();
+        let db = cfg.get("db-prod").unwrap();
+        let srcs = vec!["my file.txt".to_string(), "dir".to_string()];
+        let new = RsyncCaps {
+            progress2: true,
+            protect_args: true,
+        };
+        insta::assert_debug_snapshot!((
+            rsync_args(&ctx(), db, Direction::Send, &srcs, "~/up loads", new),
+            rsync_args(
+                &ctx(),
+                db,
+                Direction::Get,
+                &["logs/a b.log".into()],
+                ".",
+                RsyncCaps::default()
+            ),
+            scp_args(&ctx(), db, Direction::Send, &srcs, "~"),
+            scp_args(&ctx(), db, Direction::Get, &["~/x y".into()], "/tmp"),
+            sftp_batch(&ctx(), db),
+            ssh_exec(&ctx(), db, "ls -la '/var/log'"),
         ));
     }
 

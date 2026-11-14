@@ -88,6 +88,7 @@ pub enum Modal {
         title: String,
         text: String,
     },
+    Transfer(Box<crate::tui::views::transfer::TransferView>),
 }
 
 #[derive(Debug, Clone)]
@@ -381,6 +382,7 @@ impl App {
         match &mut self.modal {
             Some(Modal::Form(form)) => form.paste(s),
             Some(Modal::Prompt { input, .. }) => input.paste(s),
+            Some(Modal::Transfer(t)) => t.paste(s),
             None if self.searching => {
                 self.search.paste(s);
                 self.rebuild_rows();
@@ -419,6 +421,21 @@ impl App {
                             text: e,
                         });
                     }
+                }
+            }
+            Msg::TransferProgress(p) => {
+                if let Some(Modal::Transfer(t)) = &mut self.modal {
+                    t.progress = Some(p);
+                }
+            }
+            Msg::TransferDone(result) => {
+                use crate::tui::views::transfer::Step;
+                match &mut self.modal {
+                    Some(Modal::Transfer(t)) => t.step = Step::Done(result),
+                    _ => match result {
+                        Ok(()) => self.info("Transfer finished"),
+                        Err(e) => self.warn(format!("Transfer failed: {e}")),
+                    },
                 }
             }
             Msg::TabOpened { name, result } => match result {
@@ -538,6 +555,14 @@ impl App {
                     });
                 }
             },
+            Modal::Transfer(mut t) => {
+                use crate::tui::views::transfer::Outcome;
+                match t.handle_key(&key) {
+                    Outcome::None => self.modal = Some(Modal::Transfer(t)),
+                    Outcome::Close => {}
+                    Outcome::Start => self.start_transfer(t),
+                }
+            }
             Modal::Form(mut form) => match form.handle_key(&key) {
                 FormOutcome::None => self.modal = Some(Modal::Form(form)),
                 FormOutcome::Cancel => {}
@@ -718,7 +743,13 @@ impl App {
             }
             Cmd::AllTunnels => self.open_tunnels(None),
             Cmd::TunnelToggle | Cmd::ForwardAdd | Cmd::ForwardDelete | Cmd::Back => {}
-            Cmd::Files | Cmd::Transfer | Cmd::CopyCommand => self.warn("Not available yet"),
+            Cmd::Transfer => {
+                if let Some(s) = self.selected_server() {
+                    let view = crate::tui::views::transfer::TransferView::new(&s.name);
+                    self.modal = Some(Modal::Transfer(Box::new(view)));
+                }
+            }
+            Cmd::Files | Cmd::CopyCommand => self.warn("Not available yet"),
         }
         None
     }
@@ -857,6 +888,46 @@ impl App {
                 None
             }
         }
+    }
+
+    // ----- transfers -------------------------------------------------------
+
+    fn start_transfer(&mut self, mut t: Box<crate::tui::views::transfer::TransferView>) {
+        use crate::tui::views::transfer::Step;
+        let srcs = vec![t.source.value().trim().to_string()];
+        let dest = t.dest.value().trim().to_string();
+        let plan = self
+            .config()
+            .get(&t.server)
+            .ok_or_else(|| resolve::not_found_error(self.config(), &t.server))
+            .and_then(|s| {
+                crate::core::transfer::plan(self.config(), &self.paths, s, t.dir, &srcs, &dest)
+            });
+        match plan {
+            Err(e) => t.step = Step::Done(Err(e.to_string())),
+            Ok(plan) => {
+                t.step = Step::Running;
+                t.started = Instant::now();
+                let cancel = t.cancel.clone();
+                let tx = self.tx.clone();
+                let job = move || {
+                    let ptx = tx.clone();
+                    let result = crate::core::transfer::run(&plan, cancel, |p| {
+                        let _ = ptx.send(Event::Msg(Msg::TransferProgress(p)));
+                    });
+                    let _ = tx.send(Event::Msg(Msg::TransferDone(
+                        result.map_err(|e| e.to_string()),
+                    )));
+                };
+                match tokio::runtime::Handle::try_current() {
+                    Ok(h) => {
+                        h.spawn_blocking(job);
+                    }
+                    Err(_) => job(),
+                }
+            }
+        }
+        self.modal = Some(Modal::Transfer(t));
     }
 
     // ----- tunnels ---------------------------------------------------------

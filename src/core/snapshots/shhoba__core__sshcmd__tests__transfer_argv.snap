@@ -1,0 +1,67 @@
+---
+source: src/core/sshcmd.rs
+expression: "(rsync_args(&ctx(), db, Direction::Send, &srcs, \"~/up loads\", new),\nrsync_args(&ctx(), db, Direction::Get, &[\"logs/a b.log\".into()], \".\",\nRsyncCaps::default()), scp_args(&ctx(), db, Direction::Send, &srcs, \"~\"),\nscp_args(&ctx(), db, Direction::Get, &[\"~/x y\".into()], \"/tmp\"),\nsftp_batch(&ctx(), db), ssh_exec(&ctx(), db, \"ls -la '/var/log'\"),)"
+---
+(
+    [
+        "rsync",
+        "-az",
+        "--partial",
+        "--info=progress2",
+        "--protect-args",
+        "-e",
+        "ssh -F /state/ssh_config",
+        "my file.txt",
+        "dir",
+        "shhoba.db-prod:up loads",
+    ],
+    [
+        "rsync",
+        "-az",
+        "--partial",
+        "--progress",
+        "-e",
+        "ssh -F /state/ssh_config",
+        "shhoba.db-prod:'logs/a b.log'",
+        ".",
+    ],
+    [
+        "scp",
+        "-F",
+        "/state/ssh_config",
+        "-r",
+        "my file.txt",
+        "dir",
+        "shhoba.db-prod:",
+    ],
+    [
+        "scp",
+        "-F",
+        "/state/ssh_config",
+        "-r",
+        "shhoba.db-prod:x y",
+        "/tmp",
+    ],
+    [
+        "sftp",
+        "-F",
+        "/state/ssh_config",
+        "-b",
+        "-",
+        "shhoba.db-prod",
+    ],
+    [
+        "ssh",
+        "-F",
+        "/state/ssh_config",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "ServerAliveInterval=30",
+        "shhoba.db-prod",
+        "--",
+        "ls -la '/var/log'",
+    ],
+)

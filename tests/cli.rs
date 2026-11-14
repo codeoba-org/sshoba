@@ -494,3 +494,63 @@ fn tunnel_up_ls_down() {
     let out = env.cmd().args(["tunnel", "ls", "--json"]).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "[]");
 }
+
+/// rsync through a fake "ssh" that runs the remote command in a local shell, like sshd.
+#[test]
+fn send_and_get_with_spaces_via_rsync() {
+    use std::os::unix::fs::PermissionsExt;
+    if shhoba::core::launcher::which("rsync").is_none() {
+        return;
+    }
+    let env = Env::new();
+    let remote_home = env.path().join("remote home");
+    std::fs::create_dir_all(remote_home.join("up loads")).unwrap();
+    let fake = env.path().join("fake-ssh");
+    // argv: -F <file> shhoba.<name> <remote command words...>
+    std::fs::write(
+        &fake,
+        format!(
+            "#!/bin/sh\nshift 3\ncd '{}' || exit 1\nexec sh -c \"$*\"\n",
+            remote_home.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    env.write_config(&format!(
+        "[settings]\nssh_bin = \"{}\"\ntransfer_tool = \"rsync\"\ncontrol_master = false\n\n[[server]]\nname = \"box\"\nhost = \"h\"\n",
+        fake.display()
+    ));
+    let local = env.path().join("local dir");
+    std::fs::create_dir_all(&local).unwrap();
+    let file = local.join("my file.txt");
+    std::fs::write(&file, "hello").unwrap();
+
+    env.cmd()
+        .current_dir(&local)
+        .args(["send", "box", "my file.txt", "~/up loads"])
+        .assert()
+        .success();
+    assert_eq!(
+        std::fs::read_to_string(remote_home.join("up loads/my file.txt")).unwrap(),
+        "hello"
+    );
+
+    std::fs::write(remote_home.join("up loads/back file.txt"), "back").unwrap();
+    let down = env.path().join("down here");
+    std::fs::create_dir_all(&down).unwrap();
+    env.cmd()
+        .args(["get", "box", "up loads/back file.txt"])
+        .arg(&down)
+        .assert()
+        .success();
+    assert_eq!(
+        std::fs::read_to_string(down.join("back file.txt")).unwrap(),
+        "back"
+    );
+
+    env.cmd()
+        .args(["send", "box", "does-not-exist.txt"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("does-not-exist.txt"));
+}

@@ -28,6 +28,8 @@ pub enum Msg {
         up: bool,
         result: Result<(), String>,
     },
+    TransferProgress(crate::core::transfer::Progress),
+    TransferDone(Result<(), String>),
     TabOpened {
         name: String,
         result: Result<(), String>,

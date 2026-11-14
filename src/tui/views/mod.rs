@@ -5,6 +5,7 @@ pub mod details;
 pub mod help;
 pub mod server_form;
 pub mod server_list;
+pub mod transfer;
 pub mod tunnels;
 
 use crate::tui::app::{App, Modal, Screen};
@@ -55,6 +56,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             ..
         }) => confirm::draw_prompt(f, f.area(), title, input, error.as_deref()),
         Some(Modal::Error { title, text }) => confirm::draw_error(f, f.area(), title, text),
+        Some(Modal::Transfer(t)) => t.draw(f, f.area()),
     }
 }
 
