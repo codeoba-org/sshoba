@@ -5,7 +5,7 @@ expression: "render(&h.app, 100, 8)"
  shhoba ─ 3 servers ─ terminal
  / search: prod
 ╭─────────────────────────────────────────────────────╮╭───────────────────────────────────────────╮
-│❯   db-prod ★ db prod  via bastion                   ││db-prod  ★                                 │
+│❯   ·       db-prod ★ db prod  via bastion           ││db-prod  ★                                 │
 │                                                     ││postgres@10.0.0.5                          │
 │                                                     ││via bastion › db-prod                      │
 ╰─────────────────────────────────────────────────────╯╰───────────────────────────────────────────╯

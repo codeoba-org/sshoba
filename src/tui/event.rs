@@ -18,6 +18,10 @@ pub enum Event {
 /// Results from background work.
 #[derive(Debug)]
 pub enum Msg {
+    Ping {
+        name: String,
+        outcome: crate::core::ping::Outcome,
+    },
     TabOpened {
         name: String,
         result: Result<(), String>,

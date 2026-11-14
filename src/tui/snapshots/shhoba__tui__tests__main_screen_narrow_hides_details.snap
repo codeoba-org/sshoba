@@ -6,10 +6,10 @@ expression: "render(&h.app, 70, 12)"
  / to search
 ╭────────────────────────────────────────────────────────────────────╮
 │  ▾ personal  1                                                     │
-│❯   atasoy                                                          │
+│❯   ·       atasoy                                                  │
 │  ▾ work  2                                                         │
-│    db-prod ★ db prod  via bastion                                  │
-│    bastion   infra                                                 │
+│    ·       db-prod ★ db prod  via bastion                          │
+│    ·       bastion   infra                                         │
 │                                                                    │
 │                                                                    │
 ╰────────────────────────────────────────────────────────────────────╯

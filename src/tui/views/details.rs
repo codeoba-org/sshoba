@@ -77,8 +77,38 @@ pub fn draw(f: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Additional detail lines (forwards, ping) contributed by later features.
-fn extra_lines(_app: &App, s: &crate::core::model::Server) -> Vec<Line<'static>> {
+fn extra_lines(app: &App, s: &crate::core::model::Server) -> Vec<Line<'static>> {
+    use crate::core::state::PingStatus;
     let mut out = Vec::new();
+    if let Some(r) = app.ping.get(&s.name) {
+        let (word, color) = match r.status {
+            PingStatus::Up => ("up", Color::Green),
+            PingStatus::OpenNoSsh => ("open, no ssh banner", Color::Yellow),
+            PingStatus::Down => ("down", Color::Red),
+            PingStatus::Unknown => ("unknown", Color::DarkGray),
+        };
+        let mut text = word.to_string();
+        if let Some(l) = r.latency_ms {
+            text.push_str(&format!(" {l}ms"));
+        }
+        if let Some(reason) = &r.reason {
+            text.push_str(&format!(" ({reason})"));
+        }
+        if let Some(v) = &r.via {
+            text.push_str(&format!(" via {v}"));
+        }
+        let mut line = vec![
+            Span::styled("ping: ", Style::new().dim()),
+            Span::styled(text, Style::new().fg(color)),
+        ];
+        if !app.fresh.contains(&s.name) {
+            line.push(Span::styled(
+                format!(" · {}", ago(r.checked_at)),
+                Style::new().dim(),
+            ));
+        }
+        out.push(Line::from(line));
+    }
     if !s.forward.is_empty() {
         out.push(Line::from("forwards:".dim()));
         for fw in &s.forward {

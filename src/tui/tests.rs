@@ -43,6 +43,7 @@ group = "personal"
 
 pub struct Harness {
     pub app: App,
+    pub rx: tokio::sync::mpsc::UnboundedReceiver<Event>,
     _dir: tempfile::TempDir,
 }
 
@@ -55,9 +56,10 @@ pub fn harness(text: &str) -> Harness {
     };
     std::fs::write(&paths.config_file, text).unwrap();
     let store = ConfigStore::load(&paths.config_file).unwrap();
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     Harness {
         app: App::new(paths, store, tx),
+        rx,
         _dir: dir,
     }
 }
@@ -246,4 +248,35 @@ fn reloads_when_file_changes() {
     h.app.update(Event::Tick);
     assert!(h.app.config().get("new").is_some());
     assert_eq!(h.app.selected_server().unwrap().name, "atasoy");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ping_updates_dots_and_caches() {
+    use tokio::io::AsyncWriteExt;
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = l.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        while let Ok((mut s, _)) = l.accept().await {
+            let _ = s.write_all(b"SSH-2.0-test\r\n").await;
+        }
+    });
+    let mut h = harness(&format!(
+        "[settings]\nping_interval = 0\n[[server]]\nname = \"local\"\nhost = \"127.0.0.1\"\nport = {port}\n"
+    ));
+    key(&mut h.app, KeyCode::Char('P'));
+    assert!(h.app.checking.contains("local"));
+    assert!(render(&h.app, 80, 6).contains("◌"));
+    let ev = tokio::time::timeout(std::time::Duration::from_secs(5), h.rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    h.app.update(ev);
+    assert!(h.app.checking.is_empty());
+    let screen = render(&h.app, 80, 6);
+    assert!(screen.contains("●") && screen.contains("ms"), "{screen}");
+    let state = crate::core::state::State::load(&h.app.paths);
+    assert_eq!(
+        state.ping["local"].status,
+        crate::core::state::PingStatus::Up
+    );
 }

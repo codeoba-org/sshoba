@@ -120,6 +120,18 @@ pub enum Command {
         #[arg(add = servers())]
         name: String,
     },
+    /// Check reachability (TCP connect + SSH banner). Jumped servers are checked through
+    /// their jump chain.
+    Ping {
+        /// Servers to check (names or queries). Default: all.
+        #[arg(add = servers())]
+        queries: Vec<String>,
+        /// Check every server.
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        json: bool,
+    },
     /// Configuration helpers.
     Config {
         #[command(subcommand)]

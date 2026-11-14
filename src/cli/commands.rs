@@ -112,6 +112,7 @@ fn dispatch(ctx: &Ctx, cmd: Command) -> Result<i32> {
             Ok(0)
         }
         Command::Completions { shell } => completions(shell),
+        Command::Ping { queries, all, json } => ping(ctx, &queries, all, json),
     }
 }
 
@@ -392,4 +393,80 @@ fn completions(shell: Shell) -> Result<i32> {
         .write_registration("COMPLETE", "shhoba", "shhoba", "shhoba", &mut out)
         .map_err(|e| Error::io("write completions", e))?;
     Ok(0)
+}
+
+/// Run async core work from a synchronous command.
+fn block_on<F: std::future::Future>(f: F) -> Result<F::Output> {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| Error::io("start async runtime", e))?;
+    Ok(rt.block_on(f))
+}
+
+fn ping(ctx: &Ctx, queries: &[String], all: bool, json: bool) -> Result<i32> {
+    use crate::core::ping;
+    use crate::core::state::PingStatus;
+    let store = ctx.store()?;
+    let names: Vec<String> = if all || queries.is_empty() {
+        store.config.server.iter().map(|s| s.name.clone()).collect()
+    } else {
+        let mut v = Vec::new();
+        for q in queries {
+            let n = resolve_query(&store, q)?.name.clone();
+            if !v.contains(&n) {
+                v.push(n);
+            }
+        }
+        v
+    };
+    let sctx = sshcmd::ensure_ssh_config(&store.config, &ctx.paths)?;
+    let results = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = results.clone();
+    block_on(ping::check_many(
+        std::sync::Arc::new(store.config.clone()),
+        Some(sctx),
+        names.clone(),
+        true,
+        move |name, outcome| sink.lock().expect("lock").push((name, outcome.record())),
+    ))?;
+    let mut results = std::mem::take(&mut *results.lock().expect("lock"));
+    results.sort_by_key(|(n, _)| names.iter().position(|x| x == n));
+    State::update(&ctx.paths, |s| {
+        for (n, r) in &results {
+            s.ping.insert(n.clone(), r.clone());
+        }
+    })?;
+    let any_down = results.iter().any(|(_, r)| r.status == PingStatus::Down);
+    if json {
+        #[derive(serde::Serialize)]
+        struct Row<'a> {
+            name: &'a str,
+            #[serde(flatten)]
+            record: &'a crate::core::state::PingRecord,
+        }
+        let rows: Vec<Row> = results
+            .iter()
+            .map(|(n, r)| Row { name: n, record: r })
+            .collect();
+        print_json(&rows);
+    } else {
+        let mut t = Table::new(&["NAME", "STATUS", "LATENCY", "DETAIL"]);
+        for (n, r) in &results {
+            let status = match r.status {
+                PingStatus::Up => paint("up", Style::Green),
+                PingStatus::OpenNoSsh => paint("open (no ssh)", Style::Yellow),
+                PingStatus::Down => paint("down", Style::Red),
+                PingStatus::Unknown => paint("unknown", Style::Dim),
+            };
+            let latency = r.latency_ms.map(|l| format!("{l}ms")).unwrap_or_default();
+            let mut detail = r.reason.clone().unwrap_or_default();
+            if let Some(v) = &r.via {
+                detail = format!("via {v} {detail}").trim().to_string();
+            }
+            t.row(vec![n.clone(), status, latency, detail]);
+        }
+        print!("{}", t.render());
+    }
+    Ok(if any_down { 5 } else { 0 })
 }

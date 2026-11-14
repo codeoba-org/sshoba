@@ -84,7 +84,40 @@ pub fn draw(f: &mut Frame, area: Rect, app: &App) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-/// Reachability dot and latency for a server (filled in by ping).
-pub fn status_spans(_app: &App, _name: &str) -> Vec<Span<'static>> {
-    Vec::new()
+/// Reachability dot and latency for a server: green ● up, red ○ down, grey · unknown,
+/// yellow ◌ checking. Cached results from a previous run are dimmed.
+pub fn status_spans(app: &App, name: &str) -> Vec<Span<'static>> {
+    use crate::core::state::PingStatus;
+    let (dot, color, text) = if app.checking.contains(name) && !app.ping.contains_key(name) {
+        ("◌", Color::Yellow, String::new())
+    } else {
+        match app.ping.get(name) {
+            None => ("·", Color::DarkGray, String::new()),
+            Some(r) => match r.status {
+                PingStatus::Up => (
+                    "●",
+                    Color::Green,
+                    r.latency_ms.map(|l| format!("{l}ms")).unwrap_or_default(),
+                ),
+                PingStatus::OpenNoSsh => ("●", Color::Yellow, "open".into()),
+                PingStatus::Down => ("○", Color::Red, "down".into()),
+                PingStatus::Unknown => ("·", Color::DarkGray, "?".into()),
+            },
+        }
+    };
+    let (dot, color) = if app.checking.contains(name) {
+        ("◌", Color::Yellow)
+    } else {
+        (dot, color)
+    };
+    let mut style = Style::new().fg(color);
+    let mut text_style = Style::new();
+    if !app.fresh.contains(name) {
+        style = style.add_modifier(Modifier::DIM);
+        text_style = text_style.add_modifier(Modifier::DIM);
+    }
+    vec![
+        Span::styled(format!("{dot} "), style),
+        Span::styled(format!("{text:>5} "), text_style),
+    ]
 }

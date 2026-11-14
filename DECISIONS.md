@@ -64,3 +64,12 @@ Choices made where the build plan was silent or left a question open.
 - In the form's key field, `Tab` completes the path when it can, otherwise moves on.
 - Shell completion for forward names uses the server named earlier on the command line;
   if none is found it offers every forward name.
+
+## Ping
+
+- `shhoba ping` with no arguments checks every server (same as `--all`). CLI pings are
+  manual checks, so jumped servers are checked through the full chain (`ssh -W`).
+- `P` in the TUI and the automatic refresh check jumped servers via their first hop only;
+  `p` runs the full chain check for the selected server.
+- "Port open but no SSH banner" is shown yellow (`open`) and does not count as down for
+  exit code 5; `unknown` (e.g. `auth`) doesn't either.

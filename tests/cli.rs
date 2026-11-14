@@ -319,3 +319,42 @@ fn connect_here_needs_tty() {
         .code(1)
         .stderr(predicate::str::contains("TTY"));
 }
+
+#[test]
+fn ping_exit_codes() {
+    let env = Env::new();
+    let port = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        l.local_addr().unwrap().port()
+    };
+    let up = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let up_port = up.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        use std::io::Write;
+        for s in up.incoming().flatten() {
+            let mut s = s;
+            let _ = s.write_all(b"SSH-2.0-test\r\n");
+            std::thread::sleep(std::time::Duration::from_millis(600));
+        }
+    });
+    env.write_config(&format!(
+        "[[server]]\nname = \"down-host\"\nhost = \"127.0.0.1\"\nport = {port}\n\n[[server]]\nname = \"up-host\"\nhost = \"127.0.0.1\"\nport = {up_port}\n"
+    ));
+    env.cmd()
+        .args(["ping", "down-host"])
+        .assert()
+        .code(5)
+        .stdout(predicate::str::contains("down"));
+    let out = env
+        .cmd()
+        .args(["ping", "up-host", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v[0]["status"], "up");
+    assert_eq!(v[0]["name"], "up-host");
+    let state = std::fs::read_to_string(env.state_dir().join("state.json")).unwrap();
+    assert!(state.contains("\"up-host\""));
+    env.cmd().args(["ping", "--all"]).assert().code(5);
+}

@@ -6,10 +6,10 @@ expression: "render(&h.app, 100, 16)"
  / to search
 ╭─────────────────────────────────────────────────────╮╭───────────────────────────────────────────╮
 │  ▾ personal  1                                      ││atasoy                                     │
-│❯   atasoy                                           ││home.example.com                           │
+│❯   ·       atasoy                                   ││home.example.com                           │
 │  ▾ work  2                                          ││group: personal                            │
-│    db-prod ★ db prod  via bastion                   ││                                           │
-│    bastion   infra                                  ││$ ssh home.example.com                     │
+│    ·       db-prod ★ db prod  via bastion           ││                                           │
+│    ·       bastion   infra                          ││$ ssh home.example.com                     │
 │                                                     ││                                           │
 │                                                     ││                                           │
 │                                                     ││                                           │

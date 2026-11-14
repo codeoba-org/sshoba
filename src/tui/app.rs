@@ -6,12 +6,13 @@ use crate::core::launcher::{self, Env, LaunchMode, Target};
 use crate::core::model::{Config, Server};
 use crate::core::paths::Paths;
 use crate::core::resolve;
-use crate::core::state::State;
+use crate::core::state::{PingRecord, State};
 use crate::tui::event::{Event, Msg};
 use crate::tui::input::TextInput;
 use crate::tui::keys::{self, Cmd};
 use crate::tui::views::server_form::{FormOutcome, ServerForm};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::mpsc::UnboundedSender;
@@ -96,6 +97,13 @@ pub struct App {
     pub tx: UnboundedSender<Event>,
     config_mtime: Option<SystemTime>,
     last_mtime_check: Instant,
+    /// Latest ping result per server (cached values from state.json until refreshed).
+    pub ping: BTreeMap<String, PingRecord>,
+    /// Servers whose ping result is from this session.
+    pub fresh: HashSet<String>,
+    /// Servers with a check in flight.
+    pub checking: HashSet<String>,
+    last_auto_ping: Option<Instant>,
 }
 
 fn mtime(paths: &Paths) -> Option<SystemTime> {
@@ -108,7 +116,12 @@ impl App {
     pub fn new(paths: Paths, store: ConfigStore, tx: UnboundedSender<Event>) -> App {
         let state = State::load(&paths);
         let env = launcher::detect_env(store.config.settings.launch);
+        let ping = state.ping.clone();
         let mut app = App {
+            ping,
+            fresh: HashSet::new(),
+            checking: HashSet::new(),
+            last_auto_ping: None,
             config_mtime: mtime(&paths),
             paths,
             store,
@@ -320,6 +333,7 @@ impl App {
                     self.status = None;
                 }
                 self.check_config_changed();
+                self.maybe_auto_ping();
                 None
             }
             Event::Msg(msg) => self.on_msg(msg),
@@ -340,6 +354,17 @@ impl App {
 
     fn on_msg(&mut self, msg: Msg) -> Option<Action> {
         match msg {
+            Msg::Ping { name, outcome } => {
+                self.checking.remove(&name);
+                self.fresh.insert(name.clone());
+                let record = outcome.record();
+                self.ping.insert(name.clone(), record.clone());
+                if let Err(e) = State::update(&self.paths, |s| {
+                    s.ping.insert(name, record);
+                }) {
+                    tracing::warn!("ping not cached: {e}");
+                }
+            }
             Msg::TabOpened { name, result } => match result {
                 Ok(()) => {
                     if let Ok((state, ())) = State::update(&self.paths, |s| s.record_connect(&name))
@@ -577,9 +602,16 @@ impl App {
                 }
             }
             Cmd::ToggleFavorite => self.toggle_favorite(),
-            Cmd::Ping
-            | Cmd::PingAll
-            | Cmd::Tunnels
+            Cmd::Ping => {
+                if let Some(n) = self.selected_server().map(|s| s.name.clone()) {
+                    self.start_ping(vec![n], true);
+                }
+            }
+            Cmd::PingAll => {
+                let all = self.order.clone();
+                self.start_ping(all, false);
+            }
+            Cmd::Tunnels
             | Cmd::AllTunnels
             | Cmd::Files
             | Cmd::Transfer
@@ -693,6 +725,59 @@ impl App {
                 self.popup("Cannot connect", &e);
                 None
             }
+        }
+    }
+
+    /// Run reachability checks in the background; results arrive as `Msg::Ping`.
+    /// `full` checks jumped servers through their chain instead of just the first hop.
+    pub fn start_ping(&mut self, names: Vec<String>, full: bool) {
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let names: Vec<String> = names
+            .into_iter()
+            .filter(|n| !self.checking.contains(n))
+            .collect();
+        if names.is_empty() {
+            return;
+        }
+        let ctx = if full {
+            match crate::core::sshcmd::ensure_ssh_config(self.config(), &self.paths) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    self.warn(format!("ping: {e}"));
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        self.checking.extend(names.iter().cloned());
+        let tx = self.tx.clone();
+        let cfg = std::sync::Arc::new(self.config().clone());
+        handle.spawn(crate::core::ping::check_many(
+            cfg,
+            ctx,
+            names,
+            full,
+            move |name, outcome| {
+                let _ = tx.send(Event::Msg(Msg::Ping { name, outcome }));
+            },
+        ));
+    }
+
+    fn maybe_auto_ping(&mut self) {
+        let interval = self.config().settings.ping_interval;
+        if interval == 0 {
+            return;
+        }
+        let due = self
+            .last_auto_ping
+            .is_none_or(|t| t.elapsed() >= Duration::from_secs(interval));
+        if due && tokio::runtime::Handle::try_current().is_ok() {
+            self.last_auto_ping = Some(Instant::now());
+            let all = self.order.clone();
+            self.start_ping(all, false);
         }
     }
 
