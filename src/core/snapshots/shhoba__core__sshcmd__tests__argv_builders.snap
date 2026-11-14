@@ -1,0 +1,60 @@
+---
+source: src/core/sshcmd.rs
+expression: "(ssh_connect(&ctx(), db, &[]), ssh_connect(&ctx(), db, &[pg]),\nssh_tunnel(&ctx(), db, db.forward(\"socks\").unwrap()), ssh_check(&ctx(), db),\nssh_check(&ctx(), cfg.get(\"bastion\").unwrap()),)"
+---
+(
+    [
+        "ssh",
+        "-F",
+        "/state/ssh_config",
+        "-o",
+        "ServerAliveInterval=30",
+        "shhoba.db-prod",
+    ],
+    [
+        "ssh",
+        "-F",
+        "/state/ssh_config",
+        "-o",
+        "ServerAliveInterval=30",
+        "-L",
+        "127.0.0.1:5432:localhost:5432",
+        "shhoba.db-prod",
+    ],
+    [
+        "ssh",
+        "-F",
+        "/state/ssh_config",
+        "-N",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ControlPath=none",
+        "-o",
+        "ServerAliveInterval=30",
+        "-D",
+        "1080",
+        "shhoba.db-prod",
+    ],
+    Some(
+        [
+            "ssh",
+            "-F",
+            "/state/ssh_config",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=5",
+            "-W",
+            "10.0.0.5:2222",
+            "shhoba.bastion",
+        ],
+    ),
+    None,
+)

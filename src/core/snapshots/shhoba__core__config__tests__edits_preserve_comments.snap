@@ -1,0 +1,29 @@
+---
+source: src/core/config.rs
+expression: text
+---
+# my servers
+[settings]
+launch = "auto" # keep auto
+
+# the bastion
+[[server]]
+name = "bastion"
+host = "203.0.113.10" # public ip
+user = "ata"
+port = 2222
+
+[[server]]
+name = "db-prod"
+host = "10.0.0.5"
+jump = ["bastion"]
+
+  [[server.forward]]
+  name = "pg"
+  kind = "local"
+  local_port = 5432
+  remote = "localhost:5432"
+
+[[server]]
+name = "web"
+host = "1.2.3.4"
