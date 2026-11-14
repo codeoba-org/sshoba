@@ -9,4 +9,5 @@ pub mod paths;
 pub mod ping;
 pub mod resolve;
 pub mod sshcmd;
+pub mod sshconfig;
 pub mod state;

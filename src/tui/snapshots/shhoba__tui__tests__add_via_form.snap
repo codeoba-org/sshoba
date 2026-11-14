@@ -16,7 +16,7 @@ expression: "render(&h.app, 100, 30)"
 │              │                                                                    │              │
 │              │   key ~/.ssh/id_ed25519 (Tab completes)                            │              │
 │              │                                                                    │              │
-│              │  jump jump hosts in order, comma-separated                         │              │
+│              │  jump ⏎ pick jump hosts in order (or type, comma-separated)        │              │
 │              │                                                                    │              │
 │              │ group optional                                                     │              │
 │              │                                                                    │              │

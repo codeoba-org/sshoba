@@ -1,0 +1,33 @@
+# Sample user config for import tests.
+Host *
+    ServerAliveInterval 60
+
+Include config.d/*.conf
+
+Host bastion
+    HostName 203.0.113.10
+    User ata
+    IdentityFile ~/.ssh/id_ed25519
+    IdentityFile ~/.ssh/id_rsa
+
+Host db-prod db-replica
+    HostName 10.0.0.5
+    User postgres
+    ProxyJump bastion
+    LocalForward 127.0.0.1:5432 localhost:5432
+    DynamicForward 1080
+
+Host legacy
+    HostName legacy.example.com
+    Port 2222
+    ProxyJump ops@gateway.example.com:2200
+    RemoteForward 9000 localhost:9000
+
+Host *.internal !secret.internal
+    User admin
+
+Match host foo exec "true"
+    User nobody
+
+Host weird/name
+    HostName x

@@ -32,7 +32,7 @@ const PLACEHOLDERS: [&str; 9] = [
     "optional",
     "22",
     "~/.ssh/id_ed25519 (Tab completes)",
-    "jump hosts in order, comma-separated",
+    "⏎ pick jump hosts in order (or type, comma-separated)",
     "optional",
     "comma-separated",
     "optional",
@@ -45,6 +45,56 @@ pub enum FormOutcome {
     Submit,
 }
 
+/// Ordered multi-select of jump hosts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JumpPicker {
+    pub candidates: Vec<String>,
+    /// Chosen hops in order.
+    pub chosen: Vec<String>,
+    pub cursor: usize,
+}
+
+impl JumpPicker {
+    /// Handle a key; returns Some(true) to accept, Some(false) to cancel.
+    fn handle(&mut self, key: &KeyEvent) -> Option<bool> {
+        let n = self.candidates.len();
+        let cur = self.candidates.get(self.cursor).cloned();
+        match key.code {
+            KeyCode::Esc => return Some(false),
+            KeyCode::Enter => return Some(true),
+            KeyCode::Down | KeyCode::Char('j') if n > 0 => {
+                self.cursor = (self.cursor + 1).min(n - 1)
+            }
+            KeyCode::Up | KeyCode::Char('k') => self.cursor = self.cursor.saturating_sub(1),
+            KeyCode::Char(' ') => {
+                if let Some(c) = cur {
+                    match self.chosen.iter().position(|x| *x == c) {
+                        Some(i) => {
+                            self.chosen.remove(i);
+                        }
+                        None => self.chosen.push(c),
+                    }
+                }
+            }
+            // Move the highlighted hop earlier / later in the route.
+            KeyCode::Char('K') | KeyCode::Char('J') => {
+                if let Some(i) = cur.and_then(|c| self.chosen.iter().position(|x| *x == c)) {
+                    let j = if key.code == KeyCode::Char('K') {
+                        i.checked_sub(1)
+                    } else {
+                        (i + 1 < self.chosen.len()).then_some(i + 1)
+                    };
+                    if let Some(j) = j {
+                        self.chosen.swap(i, j);
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ServerForm {
     /// The server being edited; None when adding.
@@ -55,6 +105,9 @@ pub struct ServerForm {
     pub errors: BTreeMap<usize, String>,
     pub general_error: Option<String>,
     pub confirm_discard: bool,
+    /// Names of all servers, for the jump picker.
+    known: Vec<String>,
+    pub picker: Option<JumpPicker>,
 }
 
 fn values(s: Option<&Server>) -> Vec<String> {
@@ -91,7 +144,7 @@ fn list(s: &str) -> Vec<String> {
 }
 
 impl ServerForm {
-    pub fn new(original: Option<&Server>) -> Self {
+    pub fn new(original: Option<&Server>, known: Vec<String>) -> Self {
         let initial = values(original);
         ServerForm {
             original: original.cloned(),
@@ -101,7 +154,28 @@ impl ServerForm {
             errors: BTreeMap::new(),
             general_error: None,
             confirm_discard: false,
+            known,
+            picker: None,
         }
+    }
+
+    fn open_picker(&mut self) {
+        let me = self.original.as_ref().map(|s| s.name.clone());
+        let candidates: Vec<String> = self
+            .known
+            .iter()
+            .filter(|n| Some(*n) != me.as_ref())
+            .cloned()
+            .collect();
+        let chosen: Vec<String> = list(&self.fields[JUMP].value())
+            .into_iter()
+            .filter(|j| candidates.contains(j))
+            .collect();
+        self.picker = Some(JumpPicker {
+            candidates,
+            chosen,
+            cursor: 0,
+        });
     }
 
     pub fn title(&self) -> String {
@@ -180,9 +254,22 @@ impl ServerForm {
                 }
             }
         }
+        if let Some(p) = self.picker.as_mut() {
+            match p.handle(key) {
+                Some(true) => {
+                    let v = p.chosen.join(", ");
+                    self.fields[JUMP].set(&v);
+                    self.picker = None;
+                }
+                Some(false) => self.picker = None,
+                None => {}
+            }
+            return FormOutcome::None;
+        }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
             KeyCode::Char('s') if ctrl => return FormOutcome::Submit,
+            KeyCode::Enter if self.focus == JUMP => self.open_picker(),
             KeyCode::Esc => {
                 if self.dirty() {
                     self.confirm_discard = true;
@@ -325,7 +412,47 @@ impl ServerForm {
             let r = Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2);
             f.render_widget(Paragraph::new(m).wrap(Wrap { trim: true }), r);
         }
+        if let Some(p) = &self.picker {
+            draw_picker(f, area, p, &self.fields[NAME].value());
+        }
     }
+}
+
+fn draw_picker(f: &mut Frame, area: Rect, p: &JumpPicker, name: &str) {
+    let h = (p.candidates.len() as u16).min(12) + 4;
+    let area = centered(area, 50, h);
+    f.render_widget(Clear, area);
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .title(" Jump hosts ".bold())
+        .title_bottom(Line::from(" Space pick · J/K reorder · ⏎ ok · Esc ").dim());
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    let mut lines: Vec<Line> = Vec::new();
+    let mut route = p.chosen.clone();
+    route.push(if name.is_empty() {
+        "this".into()
+    } else {
+        name.to_string()
+    });
+    lines.push(Line::from(format!("route: {}", route.join(" › ")).dim()));
+    for (i, c) in p.candidates.iter().enumerate() {
+        let mark = match p.chosen.iter().position(|x| x == c) {
+            Some(n) => format!("[{}]", n + 1),
+            None => "[ ]".into(),
+        };
+        let style = if i == p.cursor {
+            Style::new().bg(Color::DarkGray).bold()
+        } else {
+            Style::new()
+        };
+        lines.push(Line::from(Span::styled(format!(" {mark} {c}"), style)));
+    }
+    let skip = (p.cursor + 2).saturating_sub(inner.height as usize);
+    let visible: Vec<Line> = std::iter::once(lines[0].clone())
+        .chain(lines.into_iter().skip(1 + skip))
+        .collect();
+    f.render_widget(Paragraph::new(visible), inner);
 }
 
 /// Complete a filesystem path prefix: unique match → full name (dirs get `/`),
@@ -388,7 +515,7 @@ mod tests {
 
     #[test]
     fn host_paste_splits() {
-        let mut f = ServerForm::new(None);
+        let mut f = ServerForm::new(None, vec![]);
         type_str(&mut f, "web");
         press(&mut f, KeyCode::Tab);
         f.paste("ata@1.2.3.4:2222");
@@ -400,7 +527,7 @@ mod tests {
 
     #[test]
     fn validation_errors() {
-        let mut f = ServerForm::new(None);
+        let mut f = ServerForm::new(None, vec![]);
         type_str(&mut f, "bad name");
         f.fields[JUMP].set("nope");
         assert!(f.build(&Config::default()).is_none());
@@ -412,12 +539,28 @@ mod tests {
 
     #[test]
     fn esc_confirms_when_dirty() {
-        let mut f = ServerForm::new(None);
+        let mut f = ServerForm::new(None, vec![]);
         assert_eq!(press(&mut f, KeyCode::Esc), FormOutcome::Cancel);
         type_str(&mut f, "x");
         assert_eq!(press(&mut f, KeyCode::Esc), FormOutcome::None);
         assert!(f.confirm_discard);
         assert_eq!(press(&mut f, KeyCode::Char('y')), FormOutcome::Cancel);
+    }
+
+    #[test]
+    fn jump_picker_orders_hops() {
+        let mut f = ServerForm::new(None, vec!["a".into(), "b".into(), "c".into()]);
+        f.focus = JUMP;
+        press(&mut f, KeyCode::Enter);
+        assert!(f.picker.is_some());
+        press(&mut f, KeyCode::Char('j'));
+        press(&mut f, KeyCode::Char(' ')); // b
+        press(&mut f, KeyCode::Char('k'));
+        press(&mut f, KeyCode::Char(' ')); // a
+        press(&mut f, KeyCode::Char('K')); // move a before b
+        press(&mut f, KeyCode::Enter);
+        assert!(f.picker.is_none());
+        assert_eq!(f.fields[JUMP].value(), "a, b");
     }
 
     #[test]

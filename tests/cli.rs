@@ -358,3 +358,36 @@ fn ping_exit_codes() {
     assert!(state.contains("\"up-host\""));
     env.cmd().args(["ping", "--all"]).assert().code(5);
 }
+
+#[test]
+fn import_ssh_config_fixture() {
+    let env = Env::new();
+    env.write_config(
+        "[settings]\nlaunch = \"auto\"\n\n[[server]]\nname = \"db-replica\"\nhost = \"10.0.0.6\"\n",
+    );
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ssh/config");
+    let out = env
+        .cmd()
+        .args(["import", "ssh-config", "--dry-run", "--file"])
+        .arg(&fixture)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("bastion") && stdout.contains("db-replica"),
+        "{stdout}"
+    );
+    assert!(!std::fs::read_to_string(env.config_file())
+        .unwrap()
+        .contains("bastion"));
+
+    env.cmd()
+        .args(["import", "ssh-config", "--file"])
+        .arg(&fixture)
+        .assert()
+        .success();
+    let text = std::fs::read_to_string(env.config_file()).unwrap();
+    insta::assert_snapshot!(text);
+}

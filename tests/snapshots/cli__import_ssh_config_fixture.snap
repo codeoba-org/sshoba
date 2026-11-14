@@ -1,0 +1,52 @@
+---
+source: tests/cli.rs
+expression: text
+---
+[settings]
+launch = "auto"
+
+[[server]]
+name = "db-replica"
+host = "10.0.0.6"
+
+[[server]]
+name = "web-1"
+host = "web1.example.com"
+user = "deploy"
+jump = ["bastion", "db-prod"]
+
+[[server]]
+name = "bastion"
+host = "203.0.113.10"
+user = "ata"
+key = "~/.ssh/id_ed25519"
+
+[[server]]
+name = "db-prod"
+host = "10.0.0.5"
+user = "postgres"
+jump = ["bastion"]
+
+[[server.forward]]
+name = "fwd1"
+kind = "local"
+bind = "127.0.0.1"
+local_port = 5432
+remote = "localhost:5432"
+
+[[server.forward]]
+name = "fwd2"
+kind = "socks"
+local_port = 1080
+
+[[server]]
+name = "legacy"
+host = "legacy.example.com"
+port = 2222
+extra_args = ["-o", "ProxyJump=ops@gateway.example.com:2200"]
+
+[[server.forward]]
+name = "fwd1"
+kind = "remote"
+local_port = 9000
+remote = "localhost:9000"

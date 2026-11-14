@@ -41,6 +41,7 @@ pub enum Row {
 #[derive(Debug, Clone)]
 pub enum ConfirmAction {
     Delete { name: String, force: bool },
+    Import(Vec<Server>),
 }
 
 #[derive(Debug, Clone)]
@@ -489,6 +490,15 @@ impl App {
 
     fn confirmed(&mut self, action: ConfirmAction) {
         match action {
+            ConfirmAction::Import(servers) => {
+                let n = servers.len();
+                let mut cfg = self.config().clone();
+                cfg.server.extend(servers);
+                match self.save(cfg, None) {
+                    Ok(()) => self.info(format!("Imported {n} server(s)")),
+                    Err(e) => self.popup("Import failed", &e),
+                }
+            }
             ConfirmAction::Delete { name, force } => {
                 let mut cfg = self.config().clone();
                 let res = config::remove_server(&mut cfg, &name, force)
@@ -579,10 +589,14 @@ impl App {
             Cmd::ToggleGroup => self.toggle_group(),
             Cmd::Connect => return self.connect(false),
             Cmd::ConnectWithForwards => return self.connect(true),
-            Cmd::Add => self.modal = Some(Modal::Form(Box::new(ServerForm::new(None)))),
+            Cmd::Add => {
+                let known = self.order.clone();
+                self.modal = Some(Modal::Form(Box::new(ServerForm::new(None, known))));
+            }
             Cmd::Edit => {
                 if let Some(s) = self.selected_server() {
-                    self.modal = Some(Modal::Form(Box::new(ServerForm::new(Some(s)))));
+                    let form = ServerForm::new(Some(s), self.order.clone());
+                    self.modal = Some(Modal::Form(Box::new(form)));
                 }
             }
             Cmd::EditInEditor => {
@@ -611,12 +625,10 @@ impl App {
                 let all = self.order.clone();
                 self.start_ping(all, false);
             }
-            Cmd::Tunnels
-            | Cmd::AllTunnels
-            | Cmd::Files
-            | Cmd::Transfer
-            | Cmd::CopyCommand
-            | Cmd::Import => self.warn("Not available yet"),
+            Cmd::Import => self.ask_import(),
+            Cmd::Tunnels | Cmd::AllTunnels | Cmd::Files | Cmd::Transfer | Cmd::CopyCommand => {
+                self.warn("Not available yet")
+            }
         }
         None
     }
@@ -669,6 +681,35 @@ impl App {
             }
             Err(e) => self.popup("Save failed", &e),
         }
+    }
+
+    fn ask_import(&mut self) {
+        use crate::core::sshconfig;
+        let dir = sshconfig::ssh_dir();
+        let report = match sshconfig::import_file(&dir.join("config"), &dir, self.config()) {
+            Ok(r) => r,
+            Err(e) => return self.popup("Import from ~/.ssh/config", &e),
+        };
+        if report.added.is_empty() {
+            let skipped = report.existing.len() + report.skipped.len();
+            return self.info(format!("Nothing new to import ({skipped} skipped)"));
+        }
+        let names: Vec<&str> = report.added.iter().map(|s| s.name.as_str()).collect();
+        let mut message = format!(
+            "Import {} server(s) from ~/.ssh/config?\n{}",
+            names.len(),
+            names.join(", ")
+        );
+        if !report.existing.is_empty() {
+            message.push_str(&format!(
+                "\nAlready present: {}",
+                report.existing.join(", ")
+            ));
+        }
+        self.modal = Some(Modal::Confirm {
+            message,
+            action: ConfirmAction::Import(report.added),
+        });
     }
 
     fn ask_delete(&mut self) {

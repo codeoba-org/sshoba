@@ -73,3 +73,15 @@ Choices made where the build plan was silent or left a question open.
   `p` runs the full chain check for the selected server.
 - "Port open but no SSH banner" is shown yellow (`open`) and does not count as down for
   exit code 5; `unknown` (e.g. `auth`) doesn't either.
+
+## Import
+
+- With `--file F`, relative `Include` paths resolve against F's directory; without it,
+  against `~/.ssh` as OpenSSH does.
+- When several `Host` blocks name the same alias, the first wins (OpenSSH semantics).
+  Options outside `Host` blocks (global defaults, `Host *`) are not copied: they keep
+  applying through the generated config's `Include ~/.ssh/config`.
+- Aliases with characters outside `[a-zA-Z0-9._-]` are skipped and reported.
+- In the TUI, `I` imports from `~/.ssh/config` after a confirmation listing the servers.
+- The form's jump field opens an ordered picker on Enter (Space picks, J/K reorder); the
+  field stays editable as comma-separated text.

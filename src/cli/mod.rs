@@ -132,6 +132,11 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Import servers from another format.
+    Import {
+        #[command(subcommand)]
+        command: ImportCommand,
+    },
     /// Configuration helpers.
     Config {
         #[command(subcommand)]
@@ -139,6 +144,19 @@ pub enum Command {
     },
     /// Print a shell completion script.
     Completions { shell: Shell },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ImportCommand {
+    /// Import Host blocks from ~/.ssh/config (wildcards and Match blocks are skipped).
+    SshConfig {
+        /// Config file to read (default ~/.ssh/config).
+        #[arg(long, value_name = "F")]
+        file: Option<PathBuf>,
+        /// Show what would be added without writing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]

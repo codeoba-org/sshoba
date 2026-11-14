@@ -1,7 +1,7 @@
 //! One function per subcommand. Each loads what it needs and calls core.
 
 use crate::cli::output::{self, paint, print_json, ServerJson, ShowJson, Style, Table};
-use crate::cli::{Cli, Command, ConfigCommand, Shell};
+use crate::cli::{Cli, Command, ConfigCommand, ImportCommand, Shell};
 use crate::core::config::{self, ConfigStore};
 use crate::core::error::{suggest, Error, Result};
 use crate::core::launcher::{self, LaunchMode, Target};
@@ -113,6 +113,9 @@ fn dispatch(ctx: &Ctx, cmd: Command) -> Result<i32> {
         }
         Command::Completions { shell } => completions(shell),
         Command::Ping { queries, all, json } => ping(ctx, &queries, all, json),
+        Command::Import {
+            command: ImportCommand::SshConfig { file, dry_run },
+        } => import_ssh_config(ctx, file, dry_run),
     }
 }
 
@@ -469,4 +472,50 @@ fn ping(ctx: &Ctx, queries: &[String], all: bool, json: bool) -> Result<i32> {
         print!("{}", t.render());
     }
     Ok(if any_down { 5 } else { 0 })
+}
+
+fn import_ssh_config(ctx: &Ctx, file: Option<std::path::PathBuf>, dry_run: bool) -> Result<i32> {
+    use crate::core::sshconfig;
+    let mut store = ctx.store()?;
+    // Relative Includes resolve against ~/.ssh, or the given file's directory.
+    let (file, dir) = match file {
+        Some(f) => {
+            let dir = f.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+            (f, dir)
+        }
+        None => (sshconfig::ssh_dir().join("config"), sshconfig::ssh_dir()),
+    };
+    let report = sshconfig::import_file(&file, &dir, &store.config)?;
+    let verb = if dry_run { "Would add" } else { "Added" };
+    for s in &report.added {
+        let via = if s.jump.is_empty() {
+            String::new()
+        } else {
+            format!("  via {}", s.jump.join(" › "))
+        };
+        println!(
+            "{verb} {}  {}{via}",
+            paint(&s.name, Style::Bold),
+            s.destination()
+        );
+    }
+    for n in &report.existing {
+        println!(
+            "{}",
+            paint(&format!("Skipped {n}: already exists"), Style::Dim)
+        );
+    }
+    for (n, why) in &report.skipped {
+        println!("{}", paint(&format!("Skipped {n}: {why}"), Style::Yellow));
+    }
+    if report.added.is_empty() {
+        ctx.note("Nothing to import.");
+        return Ok(0);
+    }
+    if !dry_run {
+        let mut cfg = store.config.clone();
+        cfg.server.extend(report.added);
+        store.save(cfg, None)?;
+    }
+    Ok(0)
 }
