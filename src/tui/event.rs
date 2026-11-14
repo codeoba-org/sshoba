@@ -28,6 +28,11 @@ pub enum Msg {
         up: bool,
         result: Result<(), String>,
     },
+    RemoteListing {
+        server: String,
+        keep: Option<String>,
+        result: Result<(String, Vec<crate::core::remote_fs::Entry>), String>,
+    },
     TransferProgress(crate::core::transfer::Progress),
     TransferDone(Result<(), String>),
     TabOpened {

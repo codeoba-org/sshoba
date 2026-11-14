@@ -2,6 +2,7 @@
 
 pub mod confirm;
 pub mod details;
+pub mod file_browser;
 pub mod help;
 pub mod server_form;
 pub mod server_list;
@@ -32,7 +33,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_search(f, search, app);
     let show_details = app.details.unwrap_or(true)
         && (app.details == Some(true) || body.width >= DETAILS_MIN_WIDTH);
-    if let Screen::Tunnels { .. } = app.screen {
+    if let Screen::Files(b) = &app.screen {
+        b.draw(f, body);
+    } else if let Screen::Tunnels { .. } = app.screen {
         tunnels::draw(f, body, app);
     } else if show_details {
         let [list, details] =
@@ -93,6 +96,7 @@ pub fn key_table(app: &App) -> &'static [keys::Binding] {
     match app.screen {
         Screen::Main => keys::MAIN,
         Screen::Tunnels { .. } => keys::TUNNELS,
+        Screen::Files(_) => keys::FILES,
     }
 }
 

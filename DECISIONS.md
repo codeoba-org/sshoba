@@ -113,3 +113,13 @@ Choices made where the build plan was silent or left a question open.
   it exists locally; `get`'s last path is the local dir if it is an existing directory.
 - The quick-transfer dialog is on `x`; `f` opens the two-pane file browser (phase 6).
 - scp is used without progress parsing (spinner and elapsed time only).
+
+## File browser
+
+- One round trip per listing: `cd <dir> && pwd && (find ... -printf ... || ls -la)`. A
+  marker line separates the `ls` fallback so a partially failing `find` never produces
+  duplicate entries. `pwd` gives the absolute path, so navigation works without
+  resolving `~` or symlinks on our side.
+- The local pane starts in the directory shhoba was launched from.
+- `c` copies marked entries, or the highlighted one when nothing is marked. Symlinks can
+  be entered like directories (the remote side decides whether `cd` works).

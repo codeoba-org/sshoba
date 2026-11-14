@@ -52,9 +52,10 @@ pub enum PromptAction {
 }
 
 /// Which full screen is showing.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum Screen {
     Main,
+    Files(Box<crate::tui::views::file_browser::FileBrowser>),
     /// Forwards of one server, or of all servers (None).
     Tunnels {
         server: Option<String>,
@@ -423,13 +424,54 @@ impl App {
                     }
                 }
             }
+            Msg::RemoteListing {
+                server,
+                keep,
+                result,
+            } => {
+                if let Screen::Files(b) = &mut self.screen {
+                    if b.server == server {
+                        match result {
+                            Ok((path, entries)) => {
+                                b.remote.set_entries(path, entries, keep.as_deref())
+                            }
+                            Err(e) => {
+                                b.remote.loading = false;
+                                b.remote.error = Some(e);
+                            }
+                        }
+                    }
+                }
+            }
             Msg::TransferProgress(p) => {
                 if let Some(Modal::Transfer(t)) = &mut self.modal {
                     t.progress = Some(p);
+                } else if let Screen::Files(b) = &mut self.screen {
+                    if let Some((_, prog)) = &mut b.copying {
+                        *prog = Some(p);
+                    }
                 }
             }
             Msg::TransferDone(result) => {
                 use crate::tui::views::transfer::Step;
+                if let (None, Screen::Files(b)) = (&self.modal, &mut self.screen) {
+                    if let Some((to, _)) = b.copying.take() {
+                        b.pane_mut(crate::tui::views::file_browser::FileBrowser::other(to))
+                            .marked
+                            .clear();
+                        match result {
+                            Ok(()) => self.info("Copy finished"),
+                            Err(e) => {
+                                self.modal = Some(Modal::Error {
+                                    title: "Copy failed".into(),
+                                    text: e,
+                                })
+                            }
+                        }
+                        self.refresh_pane(to, None);
+                        return None;
+                    }
+                }
                 match &mut self.modal {
                     Some(Modal::Transfer(t)) => t.step = Step::Done(result),
                     _ => match result {
@@ -476,6 +518,10 @@ impl App {
         if let Screen::Tunnels { .. } = self.screen {
             let cmd = keys::lookup(keys::TUNNELS, &key)?;
             return self.run_tunnels(cmd);
+        }
+        if let Screen::Files(_) = self.screen {
+            let cmd = keys::lookup(keys::FILES, &key)?;
+            return self.run_files(cmd);
         }
         let cmd = keys::lookup(keys::MAIN, &key)?;
         self.run(cmd)
@@ -749,7 +795,15 @@ impl App {
                     self.modal = Some(Modal::Transfer(Box::new(view)));
                 }
             }
-            Cmd::Files | Cmd::CopyCommand => self.warn("Not available yet"),
+            Cmd::Files => self.open_files(),
+            Cmd::CopyCommand => self.warn("Not available yet"),
+            Cmd::SwitchPane
+            | Cmd::Open
+            | Cmd::ParentDir
+            | Cmd::Mark
+            | Cmd::CopyMarked
+            | Cmd::Refresh
+            | Cmd::ToggleHidden => {}
         }
         None
     }
@@ -928,6 +982,205 @@ impl App {
             }
         }
         self.modal = Some(Modal::Transfer(t));
+    }
+
+    // ----- file browser ----------------------------------------------------
+
+    fn open_files(&mut self) {
+        use crate::tui::views::file_browser::FileBrowser;
+        let Some(name) = self.selected_server().map(|s| s.name.clone()) else {
+            return;
+        };
+        let cwd = std::env::current_dir()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| "/".into());
+        self.screen = Screen::Files(Box::new(FileBrowser::new(&name, cwd)));
+        self.refresh_pane(crate::tui::views::file_browser::Side::Local, None);
+        self.list_remote(String::new(), None);
+    }
+
+    /// Request a remote listing of `path` (empty = home) in the background.
+    fn list_remote(&mut self, path: String, keep: Option<String>) {
+        let Screen::Files(b) = &mut self.screen else {
+            return;
+        };
+        b.remote.loading = true;
+        b.remote.error = None;
+        let server_name = b.server.clone();
+        let Some(server) = self.store.config.get(&server_name).cloned() else {
+            return;
+        };
+        let (tx, cfg, paths) = (self.tx.clone(), self.config().clone(), self.paths.clone());
+        let job = move || {
+            let result = crate::core::remote_fs::list_remote(&cfg, &paths, &server, &path)
+                .map_err(|e| e.to_string());
+            let _ = tx.send(Event::Msg(Msg::RemoteListing {
+                server: server_name,
+                keep,
+                result,
+            }));
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(h) => {
+                h.spawn_blocking(job);
+            }
+            Err(_) => job(),
+        }
+    }
+
+    /// Re-list one pane, keeping the highlighted entry (or `keep`).
+    fn refresh_pane(&mut self, side: crate::tui::views::file_browser::Side, keep: Option<String>) {
+        use crate::tui::views::file_browser::Side;
+        let Screen::Files(b) = &mut self.screen else {
+            return;
+        };
+        let keep = keep.or_else(|| b.pane(side).current(b.show_hidden).map(|e| e.name.clone()));
+        match side {
+            Side::Local => {
+                let path = b.local.path.clone();
+                match crate::core::remote_fs::list_local(std::path::Path::new(&path)) {
+                    Ok(entries) => b.local.set_entries(path, entries, keep.as_deref()),
+                    Err(e) => b.local.error = Some(e.to_string()),
+                }
+            }
+            Side::Remote => {
+                let path = b.remote.path.clone();
+                self.list_remote(path, keep);
+            }
+        }
+    }
+
+    fn run_files(&mut self, cmd: Cmd) -> Option<Action> {
+        use crate::tui::views::file_browser::{join, parent, FileBrowser, Side};
+        let Screen::Files(b) = &mut self.screen else {
+            return None;
+        };
+        let side = b.active;
+        let hidden = b.show_hidden;
+        match cmd {
+            Cmd::Back => self.screen = Screen::Main,
+            Cmd::Help => self.modal = Some(Modal::Help),
+            Cmd::Quit => return Some(Action::Quit),
+            Cmd::Down => {
+                let p = b.pane_mut(side);
+                p.selected += 1;
+                p.clamp(hidden);
+            }
+            Cmd::Up => {
+                let p = b.pane_mut(side);
+                p.selected = p.selected.saturating_sub(1);
+            }
+            Cmd::SwitchPane => b.active = FileBrowser::other(side),
+            Cmd::ToggleHidden => {
+                b.show_hidden = !b.show_hidden;
+                let show = b.show_hidden;
+                b.local.clamp(show);
+                b.remote.clamp(show);
+            }
+            Cmd::Mark => {
+                let p = b.pane_mut(side);
+                if let Some(name) = p.current(hidden).map(|e| e.name.clone()) {
+                    if !p.marked.remove(&name) {
+                        p.marked.insert(name);
+                    }
+                    p.selected += 1;
+                    p.clamp(hidden);
+                }
+            }
+            Cmd::Open | Cmd::ParentDir => {
+                let p = b.pane(side);
+                if p.loading {
+                    return None;
+                }
+                let (target, keep) = if cmd == Cmd::Open {
+                    match p.current(hidden) {
+                        Some(e) if e.is_dir() || e.kind == crate::core::remote_fs::Kind::Link => {
+                            (join(&p.path, &e.name), None)
+                        }
+                        _ => return None,
+                    }
+                } else {
+                    let name = p
+                        .path
+                        .trim_end_matches('/')
+                        .rsplit('/')
+                        .next()
+                        .map(String::from);
+                    (parent(&p.path), name)
+                };
+                match side {
+                    Side::Local => {
+                        if std::path::Path::new(&target).is_dir() {
+                            b.local.path = target;
+                            self.refresh_pane(Side::Local, keep);
+                        }
+                    }
+                    Side::Remote => self.list_remote(target, keep),
+                }
+            }
+            Cmd::Refresh => self.refresh_pane(side, None),
+            Cmd::CopyMarked => self.copy_marked(),
+            _ => {}
+        }
+        None
+    }
+
+    fn copy_marked(&mut self) {
+        use crate::core::sshcmd::Direction;
+        use crate::tui::views::file_browser::{FileBrowser, Side};
+        let Screen::Files(b) = &mut self.screen else {
+            return;
+        };
+        if b.copying.is_some() {
+            return self.warn("A copy is already running");
+        }
+        let from = b.active;
+        let to = FileBrowser::other(from);
+        let srcs = b.pane(from).selection(b.show_hidden);
+        let dest = b.pane(to).path.clone();
+        if srcs.is_empty() || dest.is_empty() {
+            return;
+        }
+        let dir = if from == Side::Local {
+            Direction::Send
+        } else {
+            Direction::Get
+        };
+        let server_name = b.server.clone();
+        let Some(server) = self.store.config.get(&server_name).cloned() else {
+            return;
+        };
+        let plan = match crate::core::transfer::plan(
+            self.config(),
+            &self.paths,
+            &server,
+            dir,
+            &srcs,
+            &dest,
+        ) {
+            Ok(p) => p,
+            Err(e) => return self.popup("Copy failed", &e),
+        };
+        if let Screen::Files(b) = &mut self.screen {
+            b.copying = Some((to, None));
+        }
+        let tx = self.tx.clone();
+        let job = move || {
+            let ptx = tx.clone();
+            let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let result = crate::core::transfer::run(&plan, cancel, |p| {
+                let _ = ptx.send(Event::Msg(Msg::TransferProgress(p)));
+            });
+            let _ = tx.send(Event::Msg(Msg::TransferDone(
+                result.map_err(|e| e.to_string()),
+            )));
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(h) => {
+                h.spawn_blocking(job);
+            }
+            Err(_) => job(),
+        }
     }
 
     // ----- tunnels ---------------------------------------------------------

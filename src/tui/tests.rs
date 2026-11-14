@@ -315,7 +315,7 @@ fn tunnels_screen_add_and_delete_forward() {
     assert!(render(&h.app, 100, 20).contains("Start / stop tunnel"));
     key(&mut h.app, KeyCode::Esc);
     key(&mut h.app, KeyCode::Esc);
-    assert_eq!(h.app.screen, crate::tui::app::Screen::Main);
+    assert!(matches!(h.app.screen, crate::tui::app::Screen::Main));
 }
 
 #[test]
@@ -419,4 +419,144 @@ fn transfer_dialog_missing_source() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+/// A fake ssh that runs the remote command in a shell inside `remote` (as $HOME).
+fn fake_remote_ssh(dir: &std::path::Path, remote: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let fake = dir.join("fake-ssh");
+    std::fs::write(
+        &fake,
+        format!(
+            "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in shhoba.*) shift; [ \"$1\" = \"--\" ] && shift; break;; *) shift;; esac; done\nexport HOME='{r}'\ncd '{r}' || exit 1\nexec sh -c \"$*\"\n",
+            r = remote.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    fake
+}
+
+fn drain(h: &mut Harness) {
+    while let Ok(ev) = h.rx.try_recv() {
+        h.app.update(ev);
+    }
+}
+
+#[test]
+fn file_browser_lists_and_copies_both_ways() {
+    use crate::tui::app::Screen;
+    if crate::core::launcher::which("rsync").is_none() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let remote = dir.path().join("remote");
+    let local = dir.path().join("local");
+    std::fs::create_dir_all(remote.join("logs")).unwrap();
+    std::fs::create_dir_all(&local).unwrap();
+    std::fs::write(remote.join("server file.txt"), "from server").unwrap();
+    std::fs::write(remote.join(".hidden"), "").unwrap();
+    std::fs::write(local.join("a.txt"), "local a").unwrap();
+    std::fs::write(local.join("b.txt"), "local b").unwrap();
+    let fake = fake_remote_ssh(dir.path(), &remote);
+    let mut h = harness(&format!(
+        "[settings]\nssh_bin = \"{}\"\ntransfer_tool = \"rsync\"\ncontrol_master = false\nping_interval = 0\n[[server]]\nname = \"box\"\nhost = \"h\"\n",
+        fake.display()
+    ));
+    key(&mut h.app, KeyCode::Char('f'));
+    drain(&mut h);
+    let remote_real = remote.display().to_string();
+    {
+        let Screen::Files(b) = &mut h.app.screen else {
+            panic!()
+        };
+        assert_eq!(b.remote.error, None);
+        assert_eq!(b.remote.path, remote_real);
+        let names: Vec<&str> = b
+            .remote
+            .visible(false)
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(names, ["logs", "server file.txt"]);
+        b.local.path = local.display().to_string();
+    }
+    key(&mut h.app, KeyCode::Char('r')); // refresh local pane at the new path
+                                         // Mark both local files and copy them to the remote pane.
+    key(&mut h.app, KeyCode::Char(' '));
+    key(&mut h.app, KeyCode::Char(' '));
+    key(&mut h.app, KeyCode::Char('c'));
+    drain(&mut h);
+    assert!(h.app.modal.is_none(), "{:?}", h.app.modal);
+    assert_eq!(
+        std::fs::read_to_string(remote.join("a.txt")).unwrap(),
+        "local a"
+    );
+    assert_eq!(
+        std::fs::read_to_string(remote.join("b.txt")).unwrap(),
+        "local b"
+    );
+    {
+        let Screen::Files(b) = &h.app.screen else {
+            panic!()
+        };
+        assert!(
+            b.remote.entries.iter().any(|e| e.name == "b.txt"),
+            "remote pane refreshed"
+        );
+        assert!(b.local.marked.is_empty());
+    }
+    // Remote → local: highlight "server file.txt" and copy.
+    key(&mut h.app, KeyCode::Tab);
+    {
+        let Screen::Files(b) = &mut h.app.screen else {
+            panic!()
+        };
+        b.remote.selected = b
+            .remote
+            .visible(false)
+            .iter()
+            .position(|e| e.name == "server file.txt")
+            .unwrap();
+    }
+    key(&mut h.app, KeyCode::Char('c'));
+    drain(&mut h);
+    assert_eq!(
+        std::fs::read_to_string(local.join("server file.txt")).unwrap(),
+        "from server"
+    );
+    // Hidden files toggle, directory navigation and back.
+    key(&mut h.app, KeyCode::Char('.'));
+    {
+        let Screen::Files(b) = &mut h.app.screen else {
+            panic!()
+        };
+        assert!(b.remote.visible(true).iter().any(|e| e.name == ".hidden"));
+        b.remote.selected = b
+            .remote
+            .visible(true)
+            .iter()
+            .position(|e| e.name == "logs")
+            .unwrap();
+    }
+    key(&mut h.app, KeyCode::Enter);
+    drain(&mut h);
+    {
+        let Screen::Files(b) = &h.app.screen else {
+            panic!()
+        };
+        assert!(b.remote.path.ends_with("/logs"), "{}", b.remote.path);
+    }
+    key(&mut h.app, KeyCode::Backspace);
+    drain(&mut h);
+    {
+        let Screen::Files(b) = &h.app.screen else {
+            panic!()
+        };
+        assert_eq!(b.remote.path, remote_real);
+        assert_eq!(b.remote.current(true).unwrap().name, "logs");
+    }
+    assert!(render(&h.app, 120, 12).contains("server file.txt"));
+    key(&mut h.app, KeyCode::Esc);
+    assert!(matches!(h.app.screen, Screen::Main));
 }

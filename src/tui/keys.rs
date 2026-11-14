@@ -35,6 +35,14 @@ pub enum Cmd {
     ForwardAdd,
     ForwardDelete,
     Back,
+    // File browser
+    SwitchPane,
+    Open,
+    ParentDir,
+    Mark,
+    CopyMarked,
+    Refresh,
+    ToggleHidden,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -294,6 +302,93 @@ pub const TUNNELS: &[Binding] = &[
         cmd: Cmd::ForwardDelete,
         help: "Delete forward",
         hint: Some("del"),
+    },
+    Binding {
+        keys: &[code(KeyCode::Esc), k('q')],
+        label: "Esc",
+        cmd: Cmd::Back,
+        help: "Back to servers",
+        hint: Some("back"),
+    },
+    Binding {
+        keys: &[k('?')],
+        label: "?",
+        cmd: Cmd::Help,
+        help: "Help",
+        hint: Some("help"),
+    },
+    Binding {
+        keys: &[ctrl('c')],
+        label: "Ctrl+C",
+        cmd: Cmd::Quit,
+        help: "Quit",
+        hint: None,
+    },
+];
+
+pub const FILES: &[Binding] = &[
+    Binding {
+        keys: &[k('j'), code(KeyCode::Down)],
+        label: "j / ↓",
+        cmd: Cmd::Down,
+        help: "Move down",
+        hint: None,
+    },
+    Binding {
+        keys: &[k('k'), code(KeyCode::Up)],
+        label: "k / ↑",
+        cmd: Cmd::Up,
+        help: "Move up",
+        hint: None,
+    },
+    Binding {
+        keys: &[code(KeyCode::Tab)],
+        label: "Tab",
+        cmd: Cmd::SwitchPane,
+        help: "Switch pane",
+        hint: Some("pane"),
+    },
+    Binding {
+        keys: &[code(KeyCode::Enter), code(KeyCode::Right), k('l')],
+        label: "⏎",
+        cmd: Cmd::Open,
+        help: "Open directory",
+        hint: Some("open"),
+    },
+    Binding {
+        keys: &[code(KeyCode::Backspace), code(KeyCode::Left), k('h')],
+        label: "⌫",
+        cmd: Cmd::ParentDir,
+        help: "Parent directory",
+        hint: Some("up"),
+    },
+    Binding {
+        keys: &[k(' ')],
+        label: "Space",
+        cmd: Cmd::Mark,
+        help: "Mark / unmark",
+        hint: Some("mark"),
+    },
+    Binding {
+        keys: &[k('c')],
+        label: "c",
+        cmd: Cmd::CopyMarked,
+        help: "Copy marked (or highlighted) to the other pane",
+        hint: Some("copy"),
+    },
+    Binding {
+        keys: &[k('r')],
+        label: "r",
+        cmd: Cmd::Refresh,
+        help: "Refresh",
+        hint: None,
+    },
+    Binding {
+        keys: &[k('.')],
+        label: ".",
+        cmd: Cmd::ToggleHidden,
+        help: "Toggle hidden files",
+        hint: None,
     },
     Binding {
         keys: &[code(KeyCode::Esc), k('q')],
