@@ -41,12 +41,33 @@ pub enum Row {
 #[derive(Debug, Clone)]
 pub enum ConfirmAction {
     Delete { name: String, force: bool },
+    DeleteForward { server: String, name: String },
     Import(Vec<Server>),
 }
 
 #[derive(Debug, Clone)]
 pub enum PromptAction {
     Rename(String),
+    AddForward(String),
+}
+
+/// Which full screen is showing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Screen {
+    Main,
+    /// Forwards of one server, or of all servers (None).
+    Tunnels {
+        server: Option<String>,
+        selected: usize,
+    },
+}
+
+/// One row of the tunnels screen.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TunnelRow {
+    pub server: String,
+    pub forward: crate::core::model::Forward,
+    pub id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +126,12 @@ pub struct App {
     /// Servers with a check in flight.
     pub checking: HashSet<String>,
     last_auto_ping: Option<Instant>,
+    pub screen: Screen,
+    /// Tunnels with a start/stop in flight.
+    pub tunnel_busy: HashSet<String>,
+    /// Last start failure per tunnel id.
+    pub tunnel_failed: BTreeMap<String, String>,
+    last_tunnel_refresh: Instant,
 }
 
 fn mtime(paths: &Paths) -> Option<SystemTime> {
@@ -115,7 +142,7 @@ fn mtime(paths: &Paths) -> Option<SystemTime> {
 
 impl App {
     pub fn new(paths: Paths, store: ConfigStore, tx: UnboundedSender<Event>) -> App {
-        let state = State::load(&paths);
+        let state = crate::core::tunnel::refresh(&paths).unwrap_or_else(|_| State::load(&paths));
         let env = launcher::detect_env(store.config.settings.launch);
         let ping = state.ping.clone();
         let mut app = App {
@@ -123,6 +150,10 @@ impl App {
             fresh: HashSet::new(),
             checking: HashSet::new(),
             last_auto_ping: None,
+            screen: Screen::Main,
+            tunnel_busy: HashSet::new(),
+            tunnel_failed: BTreeMap::new(),
+            last_tunnel_refresh: Instant::now(),
             config_mtime: mtime(&paths),
             paths,
             store,
@@ -335,6 +366,11 @@ impl App {
                 }
                 self.check_config_changed();
                 self.maybe_auto_ping();
+                if matches!(self.screen, Screen::Tunnels { .. })
+                    && self.last_tunnel_refresh.elapsed() >= Duration::from_secs(5)
+                {
+                    self.refresh_tunnels();
+                }
                 None
             }
             Event::Msg(msg) => self.on_msg(msg),
@@ -364,6 +400,25 @@ impl App {
                     s.ping.insert(name, record);
                 }) {
                     tracing::warn!("ping not cached: {e}");
+                }
+            }
+            Msg::Tunnel { id, up, result } => {
+                self.tunnel_busy.remove(&id);
+                self.refresh_tunnels();
+                match result {
+                    Ok(()) => {
+                        self.tunnel_failed.remove(&id);
+                        self.info(format!("Tunnel {id} {}", if up { "up" } else { "stopped" }));
+                    }
+                    Err(e) => {
+                        if up {
+                            self.tunnel_failed.insert(id.clone(), e.clone());
+                        }
+                        self.modal = Some(Modal::Error {
+                            title: format!("Tunnel {id}"),
+                            text: e,
+                        });
+                    }
                 }
             }
             Msg::TabOpened { name, result } => match result {
@@ -400,6 +455,10 @@ impl App {
             self.search = TextInput::default();
             self.rebuild_rows();
             return None;
+        }
+        if let Screen::Tunnels { .. } = self.screen {
+            let cmd = keys::lookup(keys::TUNNELS, &key)?;
+            return self.run_tunnels(cmd);
         }
         let cmd = keys::lookup(keys::MAIN, &key)?;
         self.run(cmd)
@@ -499,6 +558,24 @@ impl App {
                     Err(e) => self.popup("Import failed", &e),
                 }
             }
+            ConfirmAction::DeleteForward { server, name } => {
+                let id = crate::core::tunnel::tunnel_id(&server, &name);
+                if self.state.tunnels.iter().any(|t| t.id == id) {
+                    if let Err(e) = crate::core::tunnel::stop(&self.paths, &id) {
+                        return self.popup("Stop tunnel", &e);
+                    }
+                }
+                let mut cfg = self.config().clone();
+                match config::remove_forward(&mut cfg, &server, &name)
+                    .and_then(|_| self.save(cfg, None))
+                {
+                    Ok(()) => {
+                        self.refresh_tunnels();
+                        self.info(format!("Deleted forward {id}"));
+                    }
+                    Err(e) => self.popup("Delete forward", &e),
+                }
+            }
             ConfirmAction::Delete { name, force } => {
                 let mut cfg = self.config().clone();
                 let res = config::remove_server(&mut cfg, &name, force)
@@ -516,6 +593,14 @@ impl App {
 
     fn prompt_submitted(&mut self, action: &PromptAction, value: &str) -> Result<(), Error> {
         match action {
+            PromptAction::AddForward(server) => {
+                let fwd = parse_forward_input(value)?;
+                let name = fwd.name.clone();
+                let mut cfg = self.config().clone();
+                config::add_forward(&mut cfg, server, fwd)?;
+                self.save(cfg, None)?;
+                self.info(format!("Added forward {server}/{name}"));
+            }
             PromptAction::Rename(old) => {
                 let new = value.trim();
                 let mut cfg = self.config().clone();
@@ -626,9 +711,14 @@ impl App {
                 self.start_ping(all, false);
             }
             Cmd::Import => self.ask_import(),
-            Cmd::Tunnels | Cmd::AllTunnels | Cmd::Files | Cmd::Transfer | Cmd::CopyCommand => {
-                self.warn("Not available yet")
+            Cmd::Tunnels => {
+                if let Some(n) = self.selected_server().map(|s| s.name.clone()) {
+                    self.open_tunnels(Some(n));
+                }
             }
+            Cmd::AllTunnels => self.open_tunnels(None),
+            Cmd::TunnelToggle | Cmd::ForwardAdd | Cmd::ForwardDelete | Cmd::Back => {}
+            Cmd::Files | Cmd::Transfer | Cmd::CopyCommand => self.warn("Not available yet"),
         }
         None
     }
@@ -769,6 +859,125 @@ impl App {
         }
     }
 
+    // ----- tunnels ---------------------------------------------------------
+
+    fn open_tunnels(&mut self, server: Option<String>) {
+        self.refresh_tunnels();
+        self.screen = Screen::Tunnels {
+            server,
+            selected: 0,
+        };
+    }
+
+    pub fn refresh_tunnels(&mut self) {
+        self.last_tunnel_refresh = Instant::now();
+        match crate::core::tunnel::refresh(&self.paths) {
+            Ok(s) => self.state = s,
+            Err(e) => tracing::warn!("tunnel refresh: {e}"),
+        }
+    }
+
+    /// Rows for the tunnels screen.
+    pub fn tunnel_rows(&self) -> Vec<TunnelRow> {
+        let Screen::Tunnels { server, .. } = &self.screen else {
+            return Vec::new();
+        };
+        self.order
+            .iter()
+            .filter(|n| server.as_ref().is_none_or(|s| s == *n))
+            .filter_map(|n| self.config().get(n))
+            .flat_map(|s| {
+                s.forward.iter().map(|f| TunnelRow {
+                    server: s.name.clone(),
+                    forward: f.clone(),
+                    id: crate::core::tunnel::tunnel_id(&s.name, &f.name),
+                })
+            })
+            .collect()
+    }
+
+    pub fn running_tunnel(&self, id: &str) -> Option<&crate::core::state::TunnelRecord> {
+        self.state.tunnels.iter().find(|t| t.id == id)
+    }
+
+    fn run_tunnels(&mut self, cmd: Cmd) -> Option<Action> {
+        let rows = self.tunnel_rows();
+        let Screen::Tunnels { server, selected } = &mut self.screen else {
+            return None;
+        };
+        let current = rows.get(*selected).cloned();
+        let server_for_add = server
+            .clone()
+            .or(current.as_ref().map(|r| r.server.clone()));
+        match cmd {
+            Cmd::Down => *selected = (*selected + 1).min(rows.len().saturating_sub(1)),
+            Cmd::Up => *selected = selected.saturating_sub(1),
+            Cmd::Back => self.screen = Screen::Main,
+            Cmd::Help => self.modal = Some(Modal::Help),
+            Cmd::Quit => return Some(Action::Quit),
+            Cmd::ForwardAdd => match server_for_add {
+                Some(s) => {
+                    self.modal = Some(Modal::Prompt {
+                        title: format!("Add forward to {s}: name -L|-R|-D spec [auto]"),
+                        input: TextInput::default(),
+                        action: PromptAction::AddForward(s),
+                        error: None,
+                    })
+                }
+                None => self.warn("Select a server first"),
+            },
+            Cmd::ForwardDelete => {
+                if let Some(r) = current {
+                    self.modal = Some(Modal::Confirm {
+                        message: format!("Delete forward {}?", r.id),
+                        action: ConfirmAction::DeleteForward {
+                            server: r.server,
+                            name: r.forward.name,
+                        },
+                    });
+                }
+            }
+            Cmd::TunnelToggle => {
+                if let Some(r) = current {
+                    self.toggle_tunnel(r);
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    fn toggle_tunnel(&mut self, row: TunnelRow) {
+        if self.tunnel_busy.contains(&row.id) {
+            return;
+        }
+        let up = self.running_tunnel(&row.id).is_none();
+        let Some(server) = self.config().get(&row.server).cloned() else {
+            return;
+        };
+        self.tunnel_busy.insert(row.id.clone());
+        let (tx, paths, cfg) = (self.tx.clone(), self.paths.clone(), self.config().clone());
+        let id = row.id.clone();
+        let job = move || {
+            let result = if up {
+                crate::core::tunnel::start(&cfg, &paths, &server, &row.forward).map(|_| ())
+            } else {
+                crate::core::tunnel::stop(&paths, &row.id)
+            };
+            let _ = tx.send(Event::Msg(Msg::Tunnel {
+                id,
+                up,
+                result: result.map_err(|e| e.to_string()),
+            }));
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(h) => {
+                h.spawn_blocking(job);
+            }
+            Err(_) => job(),
+        }
+    }
+
     /// Run reachability checks in the background; results arrive as `Msg::Ping`.
     /// `full` checks jumped servers through their chain instead of just the first hop.
     pub fn start_ping(&mut self, names: Vec<String>, full: bool) {
@@ -826,4 +1035,24 @@ impl App {
     pub fn is_force_quit(key: &KeyEvent) -> bool {
         key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
     }
+}
+
+/// Parse `name -L|-R|-D spec [auto]` from the add-forward prompt.
+pub fn parse_forward_input(value: &str) -> Result<crate::core::model::Forward, Error> {
+    use crate::core::model::{Forward, ForwardKind};
+    let parts: Vec<&str> = value.split_whitespace().collect();
+    let usage = || Error::other("expected: name -L|-R|-D spec [auto]");
+    let (name, flag, spec) = match parts.as_slice() {
+        [n, f, s] | [n, f, s, _] => (*n, *f, *s),
+        _ => return Err(usage()),
+    };
+    let kind = match flag {
+        "-L" | "L" => ForwardKind::Local,
+        "-R" | "R" => ForwardKind::Remote,
+        "-D" | "D" => ForwardKind::Socks,
+        _ => return Err(usage()),
+    };
+    let mut f = Forward::parse_spec(name, kind, spec).map_err(Error::Other)?;
+    f.auto = matches!(parts.get(3), Some(&"auto") | Some(&"--auto"));
+    Ok(f)
 }

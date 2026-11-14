@@ -22,6 +22,12 @@ pub enum Msg {
         name: String,
         outcome: crate::core::ping::Outcome,
     },
+    /// A tunnel start (`up = true`) or stop finished.
+    Tunnel {
+        id: String,
+        up: bool,
+        result: Result<(), String>,
+    },
     TabOpened {
         name: String,
         result: Result<(), String>,

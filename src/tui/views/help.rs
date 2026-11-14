@@ -8,8 +8,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph};
 use ratatui::Frame;
 
-pub fn draw(f: &mut Frame, area: Rect) {
-    let rows: Vec<Line> = keys::MAIN
+pub fn draw(f: &mut Frame, area: Rect, table: &[keys::Binding]) {
+    let rows: Vec<Line> = table
         .iter()
         .map(|b| {
             Line::from(vec![

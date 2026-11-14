@@ -1,7 +1,7 @@
 //! One function per subcommand. Each loads what it needs and calls core.
 
 use crate::cli::output::{self, paint, print_json, ServerJson, ShowJson, Style, Table};
-use crate::cli::{Cli, Command, ConfigCommand, ImportCommand, Shell};
+use crate::cli::{Cli, Command, ConfigCommand, FwdCommand, ImportCommand, Shell, TunnelCommand};
 use crate::core::config::{self, ConfigStore};
 use crate::core::error::{suggest, Error, Result};
 use crate::core::launcher::{self, LaunchMode, Target};
@@ -113,6 +113,8 @@ fn dispatch(ctx: &Ctx, cmd: Command) -> Result<i32> {
         }
         Command::Completions { shell } => completions(shell),
         Command::Ping { queries, all, json } => ping(ctx, &queries, all, json),
+        Command::Fwd { command } => fwd(ctx, command),
+        Command::Tunnel { command } => tunnel(ctx, command),
         Command::Import {
             command: ImportCommand::SshConfig { file, dry_run },
         } => import_ssh_config(ctx, file, dry_run),
@@ -518,4 +520,223 @@ fn import_ssh_config(ctx: &Ctx, file: Option<std::path::PathBuf>, dry_run: bool)
         store.save(cfg, None)?;
     }
     Ok(0)
+}
+
+fn fwd(ctx: &Ctx, command: FwdCommand) -> Result<i32> {
+    use crate::core::model::{Forward, ForwardKind};
+    use crate::core::tunnel;
+    match command {
+        FwdCommand::Add {
+            server,
+            name,
+            local,
+            remote,
+            dynamic,
+            auto,
+        } => {
+            let (kind, spec) = match (local, remote, dynamic) {
+                (Some(s), _, _) => (ForwardKind::Local, s),
+                (_, Some(s), _) => (ForwardKind::Remote, s),
+                (_, _, Some(s)) => (ForwardKind::Socks, s),
+                _ => return Err(Error::other("one of -L, -R or -D is required")),
+            };
+            let mut f = Forward::parse_spec(&name, kind, &spec).map_err(Error::Other)?;
+            f.auto = auto;
+            let summary = f.summary();
+            let mut store = ctx.store()?;
+            let mut cfg = store.config.clone();
+            config::add_forward(&mut cfg, &server, f)?;
+            store.save(cfg, None)?;
+            ctx.note(format!("Added forward {server}/{name}: {summary}"));
+            Ok(0)
+        }
+        FwdCommand::Ls { server, json } => {
+            let store = ctx.store()?;
+            let servers: Vec<&Server> = match &server {
+                Some(n) => vec![resolve::require(&store.config, n)?],
+                None => store.config.server.iter().collect(),
+            };
+            let state = tunnel::refresh(&ctx.paths)?;
+            let running = |s: &str, f: &str| {
+                state
+                    .tunnels
+                    .iter()
+                    .any(|t| t.id == tunnel::tunnel_id(s, f))
+            };
+            if json {
+                #[derive(serde::Serialize)]
+                struct Row {
+                    server: String,
+                    #[serde(flatten)]
+                    forward: output::ForwardJson,
+                    running: bool,
+                }
+                let rows: Vec<Row> = servers
+                    .iter()
+                    .flat_map(|s| {
+                        s.forward.iter().map(|f| Row {
+                            server: s.name.clone(),
+                            forward: f.into(),
+                            running: running(&s.name, &f.name),
+                        })
+                    })
+                    .collect();
+                print_json(&rows);
+                return Ok(0);
+            }
+            let mut t = Table::new(&["SERVER", "NAME", "KIND", "SPEC", "AUTO", "TUNNEL"]);
+            let mut any = false;
+            for s in &servers {
+                for f in &s.forward {
+                    any = true;
+                    t.row(vec![
+                        s.name.clone(),
+                        f.name.clone(),
+                        format!("{:?}", f.kind).to_lowercase(),
+                        format!("{} {}", f.kind.flag(), f.spec()),
+                        if f.auto { "yes".into() } else { String::new() },
+                        if running(&s.name, &f.name) {
+                            paint("up", Style::Green)
+                        } else {
+                            paint("down", Style::Dim)
+                        },
+                    ]);
+                }
+            }
+            if any {
+                print!("{}", t.render());
+            } else {
+                ctx.note("No forwards. Add one with `shhoba fwd add <server> <name> -L <spec>`.");
+            }
+            Ok(0)
+        }
+        FwdCommand::Rm { server, name } => {
+            let mut store = ctx.store()?;
+            let mut cfg = store.config.clone();
+            config::remove_forward(&mut cfg, &server, &name)?;
+            let id = tunnel::tunnel_id(&server, &name);
+            if tunnel::refresh(&ctx.paths)?
+                .tunnels
+                .iter()
+                .any(|t| t.id == id)
+            {
+                tunnel::stop(&ctx.paths, &id)?;
+                ctx.note(format!("Stopped tunnel {id}"));
+            }
+            store.save(cfg, None)?;
+            ctx.note(format!("Deleted forward {server}/{name}"));
+            Ok(0)
+        }
+    }
+}
+
+/// Look up the named forwards of a server (all of them if `names` is empty).
+fn pick_forwards<'a>(
+    s: &'a Server,
+    names: &[String],
+) -> Result<Vec<&'a crate::core::model::Forward>> {
+    if names.is_empty() {
+        if s.forward.is_empty() {
+            return Err(Error::not_found(
+                format!(
+                    "forwards for \"{}\" (add one with `shhoba fwd add`)",
+                    s.name
+                ),
+                None,
+            ));
+        }
+        return Ok(s.forward.iter().collect());
+    }
+    names
+        .iter()
+        .map(|n| {
+            s.forward(n).ok_or_else(|| {
+                Error::not_found(
+                    format!("forward \"{}/{n}\"", s.name),
+                    suggest(n, s.forward.iter().map(|f| f.name.as_str())),
+                )
+            })
+        })
+        .collect()
+}
+
+fn tunnel(ctx: &Ctx, command: TunnelCommand) -> Result<i32> {
+    use crate::core::tunnel;
+    match command {
+        TunnelCommand::Up {
+            server,
+            forwards,
+            all,
+        } => {
+            let store = ctx.store()?;
+            let s = resolve::require(&store.config, &server)?;
+            let names = if all { Vec::new() } else { forwards };
+            let mut failed = None;
+            for f in pick_forwards(s, &names)? {
+                match tunnel::start(&store.config, &ctx.paths, s, f) {
+                    Ok(rec) => ctx.note(format!(
+                        "Tunnel {} up: {} (pid {})",
+                        rec.id,
+                        f.summary(),
+                        rec.pid
+                    )),
+                    Err(e) => {
+                        eprintln!("{} {}/{}: {e}", paint("error:", Style::Red), s.name, f.name);
+                        failed = Some(e.exit_code());
+                    }
+                }
+            }
+            Ok(failed.unwrap_or(0))
+        }
+        TunnelCommand::Down {
+            server,
+            forwards,
+            all,
+        } => {
+            let state = tunnel::refresh(&ctx.paths)?;
+            let ids: Vec<String> = match &server {
+                None => state.tunnels.iter().map(|t| t.id.clone()).collect(),
+                Some(srv) if forwards.is_empty() => state
+                    .tunnels
+                    .iter()
+                    .filter(|t| t.server == *srv)
+                    .map(|t| t.id.clone())
+                    .collect(),
+                Some(srv) => forwards.iter().map(|f| tunnel::tunnel_id(srv, f)).collect(),
+            };
+            let _ = all;
+            if ids.is_empty() {
+                ctx.note("No running tunnels.");
+                return Ok(0);
+            }
+            for id in ids {
+                tunnel::stop(&ctx.paths, &id)?;
+                ctx.note(format!("Stopped {id}"));
+            }
+            Ok(0)
+        }
+        TunnelCommand::Ls { json } => {
+            let state = tunnel::refresh(&ctx.paths)?;
+            if json {
+                print_json(&state.tunnels);
+                return Ok(0);
+            }
+            if state.tunnels.is_empty() {
+                ctx.note("No running tunnels.");
+                return Ok(0);
+            }
+            let mut t = Table::new(&["ID", "SPEC", "PID", "UPTIME", "STATUS"]);
+            for r in &state.tunnels {
+                t.row(vec![
+                    r.id.clone(),
+                    r.spec.clone(),
+                    r.pid.to_string(),
+                    tunnel::uptime(r),
+                    paint("up", Style::Green),
+                ]);
+            }
+            print!("{}", t.render());
+            Ok(0)
+        }
+    }
 }

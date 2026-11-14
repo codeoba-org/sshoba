@@ -112,7 +112,16 @@ fn extra_lines(app: &App, s: &crate::core::model::Server) -> Vec<Line<'static>> 
     if !s.forward.is_empty() {
         out.push(Line::from("forwards:".dim()));
         for fw in &s.forward {
-            out.push(Line::from(format!("  {}  {}", fw.name, fw.summary())));
+            let id = crate::core::tunnel::tunnel_id(&s.name, &fw.name);
+            let dot = if app.running_tunnel(&id).is_some() {
+                Span::styled(" ●", Style::new().fg(Color::Green))
+            } else {
+                Span::raw("")
+            };
+            out.push(Line::from(vec![
+                Span::raw(format!("  {}  {}", fw.name, fw.summary())),
+                dot,
+            ]));
         }
     }
     out

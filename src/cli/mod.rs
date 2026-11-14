@@ -29,6 +29,10 @@ fn servers() -> ArgValueCandidates {
     ArgValueCandidates::new(complete::server_names)
 }
 
+fn forwards() -> ArgValueCandidates {
+    ArgValueCandidates::new(complete::forward_names)
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Connect to a server (new tab in tmux/Zellij, else this terminal).
@@ -132,6 +136,16 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Manage saved port forwards.
+    Fwd {
+        #[command(subcommand)]
+        command: FwdCommand,
+    },
+    /// Start, stop and list background tunnels.
+    Tunnel {
+        #[command(subcommand)]
+        command: TunnelCommand,
+    },
     /// Import servers from another format.
     Import {
         #[command(subcommand)]
@@ -144,6 +158,73 @@ pub enum Command {
     },
     /// Print a shell completion script.
     Completions { shell: Shell },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum FwdCommand {
+    /// Save a forward. Specs use ssh syntax: `5432:localhost:5432`,
+    /// `127.0.0.1:8080:web:80`, or `1080` for SOCKS.
+    Add {
+        #[arg(add = servers())]
+        server: String,
+        name: String,
+        /// Local forward.
+        #[arg(short = 'L', value_name = "SPEC", group = "kind", required = true)]
+        local: Option<String>,
+        /// Remote forward.
+        #[arg(short = 'R', value_name = "SPEC", group = "kind")]
+        remote: Option<String>,
+        /// Dynamic (SOCKS) forward.
+        #[arg(short = 'D', value_name = "SPEC", group = "kind")]
+        dynamic: Option<String>,
+        /// Add this forward to `connect --with-forwards` sessions.
+        #[arg(long)]
+        auto: bool,
+    },
+    /// List saved forwards.
+    #[command(visible_alias = "list")]
+    Ls {
+        #[arg(add = servers())]
+        server: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete a saved forward (stops its tunnel if running).
+    Rm {
+        #[arg(add = servers())]
+        server: String,
+        #[arg(add = forwards())]
+        name: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TunnelCommand {
+    /// Start detached tunnel(s). Without forward names, starts all of the server's forwards.
+    Up {
+        #[arg(add = servers())]
+        server: String,
+        #[arg(add = forwards())]
+        forwards: Vec<String>,
+        /// Start every forward of the server.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Stop tunnel(s). `--all` without a server stops every tunnel.
+    Down {
+        #[arg(add = servers(), required_unless_present = "all")]
+        server: Option<String>,
+        #[arg(add = forwards())]
+        forwards: Vec<String>,
+        #[arg(long)]
+        all: bool,
+    },
+    /// List running tunnels.
+    #[command(visible_alias = "list")]
+    Ls {
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]

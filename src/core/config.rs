@@ -529,6 +529,42 @@ pub fn remove_server(cfg: &mut Config, name: &str, force: bool) -> Result<()> {
     Ok(())
 }
 
+/// Add a forward to a server.
+pub fn add_forward(cfg: &mut Config, server: &str, fwd: crate::core::model::Forward) -> Result<()> {
+    let not_found = crate::core::resolve::not_found_error(cfg, server);
+    let s = cfg.get_mut(server).ok_or(not_found)?;
+    if !valid_name(&fwd.name) {
+        return Err(Error::other(format!(
+            "invalid forward name \"{}\": use letters, digits, '.', '_' or '-'",
+            fwd.name
+        )));
+    }
+    if s.forward(&fwd.name).is_some() {
+        return Err(Error::other(format!(
+            "server \"{server}\" already has a forward named \"{}\"",
+            fwd.name
+        )));
+    }
+    s.forward.push(fwd);
+    Ok(())
+}
+
+/// Remove a forward from a server.
+pub fn remove_forward(cfg: &mut Config, server: &str, name: &str) -> Result<()> {
+    let not_found = crate::core::resolve::not_found_error(cfg, server);
+    let s = cfg.get_mut(server).ok_or(not_found)?;
+    let before = s.forward.len();
+    s.forward.retain(|f| f.name != name);
+    if s.forward.len() == before {
+        let names: Vec<&str> = s.forward.iter().map(|f| f.name.as_str()).collect();
+        return Err(Error::not_found(
+            format!("forward \"{server}/{name}\""),
+            suggest(name, names),
+        ));
+    }
+    Ok(())
+}
+
 /// Fields accepted by `shhoba set`.
 pub const SETTABLE_FIELDS: &[&str] = &[
     "name",

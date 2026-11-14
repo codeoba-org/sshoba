@@ -30,6 +30,11 @@ pub enum Cmd {
     Import,
     Help,
     Quit,
+    // Tunnels screen
+    TunnelToggle,
+    ForwardAdd,
+    ForwardDelete,
+    Back,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -248,6 +253,65 @@ pub const MAIN: &[Binding] = &[
     Binding {
         keys: &[k('q'), ctrl('c')],
         label: "q / Ctrl+C",
+        cmd: Cmd::Quit,
+        help: "Quit",
+        hint: None,
+    },
+];
+
+pub const TUNNELS: &[Binding] = &[
+    Binding {
+        keys: &[k('j'), code(KeyCode::Down)],
+        label: "j / ↓",
+        cmd: Cmd::Down,
+        help: "Move down",
+        hint: None,
+    },
+    Binding {
+        keys: &[k('k'), code(KeyCode::Up)],
+        label: "k / ↑",
+        cmd: Cmd::Up,
+        help: "Move up",
+        hint: None,
+    },
+    Binding {
+        keys: &[code(KeyCode::Enter)],
+        label: "⏎",
+        cmd: Cmd::TunnelToggle,
+        help: "Start / stop tunnel",
+        hint: Some("up/down"),
+    },
+    Binding {
+        keys: &[k('a')],
+        label: "a",
+        cmd: Cmd::ForwardAdd,
+        help: "Add forward (e.g. pg -L 5432:localhost:5432)",
+        hint: Some("add"),
+    },
+    Binding {
+        keys: &[k('d')],
+        label: "d",
+        cmd: Cmd::ForwardDelete,
+        help: "Delete forward",
+        hint: Some("del"),
+    },
+    Binding {
+        keys: &[code(KeyCode::Esc), k('q')],
+        label: "Esc",
+        cmd: Cmd::Back,
+        help: "Back to servers",
+        hint: Some("back"),
+    },
+    Binding {
+        keys: &[k('?')],
+        label: "?",
+        cmd: Cmd::Help,
+        help: "Help",
+        hint: Some("help"),
+    },
+    Binding {
+        keys: &[ctrl('c')],
+        label: "Ctrl+C",
         cmd: Cmd::Quit,
         help: "Quit",
         hint: None,

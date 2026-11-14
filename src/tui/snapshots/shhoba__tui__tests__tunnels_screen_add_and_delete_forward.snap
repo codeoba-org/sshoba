@@ -1,0 +1,12 @@
+---
+source: src/tui/tests.rs
+expression: "render(&h.app, 100, 8)"
+---
+ shhoba ─ 3 servers ─ terminal
+
+╭ Tunnels · db-prod ───────────────────────────────────────────────────────────────────────────────╮
+│  NAME                           KIND    SPEC                           STATUS    PID     UPTIME  │
+│❯ pg                             local   -L 5432:localhost:5432         ○ down                    │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ⏎ up/down  a add  d del  Esc back  ? help

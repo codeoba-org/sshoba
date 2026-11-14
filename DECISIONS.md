@@ -85,3 +85,17 @@ Choices made where the build plan was silent or left a question open.
 - In the TUI, `I` imports from `~/.ssh/config` after a confirmation listing the servers.
 - The form's jump field opens an ordered picker on Enter (Space picks, J/K reorder); the
   field stays editable as comma-separated text.
+
+## Tunnels
+
+- Detaching uses `setsid()` in `pre_exec` only. The plan also lists
+  `process_group(0)`, but a process-group leader cannot call `setsid()` (EPERM), and a
+  new session already gives the tunnel its own process group.
+- A long-lived process (the TUI) reaps its tunnel children on a background thread so a
+  dead tunnel never lingers as a zombie that `kill(pid, 0)` would report as alive.
+- `tunnel up <server>` without forward names starts all of the server's forwards (same
+  as `--all`). `tunnel down <server>` stops all of that server's tunnels; `--all` alone
+  stops every tunnel.
+- `fwd rm` stops the forward's tunnel first if it is running.
+- TUI add-forward uses one prompt: `name -L|-R|-D spec [auto]`.
+- Local-port checks bind `bind` (default 127.0.0.1); `*` checks 0.0.0.0.

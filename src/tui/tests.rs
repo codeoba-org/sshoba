@@ -280,3 +280,75 @@ async fn ping_updates_dots_and_caches() {
         crate::core::state::PingStatus::Up
     );
 }
+
+#[test]
+fn tunnels_screen_add_and_delete_forward() {
+    let mut h = harness(FIXTURE);
+    h.app.select_server("db-prod");
+    key(&mut h.app, KeyCode::Char('t'));
+    insta::assert_snapshot!(render(&h.app, 100, 8));
+    key(&mut h.app, KeyCode::Char('a'));
+    typ(&mut h.app, "web -L 8080:localhost:80 auto");
+    key(&mut h.app, KeyCode::Enter);
+    assert!(h.app.modal.is_none(), "{:?}", h.app.modal);
+    let f = h
+        .app
+        .config()
+        .get("db-prod")
+        .unwrap()
+        .forward("web")
+        .unwrap()
+        .clone();
+    assert!(f.auto);
+    assert_eq!(h.app.tunnel_rows().len(), 2);
+    key(&mut h.app, KeyCode::Char('j'));
+    key(&mut h.app, KeyCode::Char('d'));
+    key(&mut h.app, KeyCode::Char('y'));
+    assert!(h
+        .app
+        .config()
+        .get("db-prod")
+        .unwrap()
+        .forward("web")
+        .is_none());
+    key(&mut h.app, KeyCode::Char('?'));
+    assert!(render(&h.app, 100, 20).contains("Start / stop tunnel"));
+    key(&mut h.app, KeyCode::Esc);
+    key(&mut h.app, KeyCode::Esc);
+    assert_eq!(h.app.screen, crate::tui::app::Screen::Main);
+}
+
+#[test]
+fn forward_prompt_parsing() {
+    use crate::tui::app::parse_forward_input;
+    assert_eq!(parse_forward_input("s -D 1080").unwrap().spec(), "1080");
+    assert!(parse_forward_input("pg 5432").is_err());
+    assert!(parse_forward_input("pg -X 1:h:2").is_err());
+}
+
+#[test]
+fn toggle_tunnel_up_and_down() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let fake = dir.path().join("fake-ssh");
+    std::fs::write(&fake, "#!/bin/sh\nwhile true; do sleep 1; done\n").unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut h = harness(&format!(
+        "[settings]\nssh_bin = \"{}\"\nping_interval = 0\n[[server]]\nname = \"s\"\nhost = \"h\"\n[[server.forward]]\nname = \"r\"\nkind = \"remote\"\nlocal_port = 9000\nremote = \"localhost:9000\"\n",
+        fake.display()
+    ));
+    key(&mut h.app, KeyCode::Char('t'));
+    key(&mut h.app, KeyCode::Enter); // runs synchronously without a runtime
+    let ev = h.rx.try_recv().unwrap();
+    h.app.update(ev);
+    assert!(h.app.running_tunnel("s/r").is_some());
+    let screen = render(&h.app, 100, 8);
+    assert!(
+        screen.contains("● up") && screen.contains("1 tunnel up"),
+        "{screen}"
+    );
+    key(&mut h.app, KeyCode::Enter);
+    let ev = h.rx.try_recv().unwrap();
+    h.app.update(ev);
+    assert!(h.app.running_tunnel("s/r").is_none());
+}

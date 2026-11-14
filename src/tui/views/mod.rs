@@ -5,8 +5,9 @@ pub mod details;
 pub mod help;
 pub mod server_form;
 pub mod server_list;
+pub mod tunnels;
 
-use crate::tui::app::{App, Modal};
+use crate::tui::app::{App, Modal, Screen};
 use crate::tui::input::TextInput;
 use crate::tui::keys;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -30,7 +31,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_search(f, search, app);
     let show_details = app.details.unwrap_or(true)
         && (app.details == Some(true) || body.width >= DETAILS_MIN_WIDTH);
-    if show_details {
+    if let Screen::Tunnels { .. } = app.screen {
+        tunnels::draw(f, body, app);
+    } else if show_details {
         let [list, details] =
             Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)])
                 .areas(body);
@@ -42,7 +45,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_footer(f, footer, app);
     match &app.modal {
         None => {}
-        Some(Modal::Help) => help::draw(f, f.area()),
+        Some(Modal::Help) => help::draw(f, f.area(), key_table(app)),
         Some(Modal::Form(form)) => form.draw(f, f.area(), app.config()),
         Some(Modal::Confirm { message, .. }) => confirm::draw_confirm(f, f.area(), message),
         Some(Modal::Prompt {
@@ -75,11 +78,26 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     );
 }
 
-fn header_right(_app: &App) -> String {
-    String::new()
+fn header_right(app: &App) -> String {
+    match app.state.tunnels.len() {
+        0 => String::new(),
+        1 => "1 tunnel up ".into(),
+        n => format!("{n} tunnels up "),
+    }
+}
+
+/// The keybinding table for the current screen.
+pub fn key_table(app: &App) -> &'static [keys::Binding] {
+    match app.screen {
+        Screen::Main => keys::MAIN,
+        Screen::Tunnels { .. } => keys::TUNNELS,
+    }
 }
 
 fn draw_search(f: &mut Frame, area: Rect, app: &App) {
+    if !matches!(app.screen, Screen::Main) {
+        return;
+    }
     if app.searching || !app.search.is_empty() {
         let label = Span::styled(" / search: ", Style::new().fg(Color::Cyan));
         let [l, r] = Layout::horizontal([Constraint::Length(11), Constraint::Min(1)]).areas(area);
@@ -96,7 +114,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         Some(s) => Line::from(format!(" {}", s.text).fg(Color::Green)),
         None => {
             let mut spans = vec![Span::raw(" ")];
-            for (k, h) in keys::hints(keys::MAIN) {
+            for (k, h) in keys::hints(key_table(app)) {
                 spans.push(Span::styled(k, Style::new().fg(Color::Cyan).bold()));
                 spans.push(Span::raw(format!(" {h}  ")));
             }

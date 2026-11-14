@@ -391,3 +391,106 @@ fn import_ssh_config_fixture() {
     let text = std::fs::read_to_string(env.config_file()).unwrap();
     insta::assert_snapshot!(text);
 }
+
+#[test]
+fn fwd_crud() {
+    let env = Env::new();
+    env.write_config(FIXTURE);
+    env.cmd()
+        .args([
+            "fwd",
+            "add",
+            "web-2",
+            "app",
+            "-L",
+            "127.0.0.1:8080:web:80",
+            "--auto",
+        ])
+        .assert()
+        .success();
+    env.cmd()
+        .args(["fwd", "add", "web-2", "socks", "-D", "1080"])
+        .assert()
+        .success();
+    env.cmd()
+        .args(["fwd", "add", "web-2", "bad", "-L", "8080"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("invalid -L forward spec"));
+    env.cmd()
+        .args(["fwd", "add", "web-2", "app", "-R", "9000:localhost:9000"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("already has"));
+    let out = env
+        .cmd()
+        .args(["fwd", "ls", "web-2", "--json"])
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v[0]["spec"], "127.0.0.1:8080:web:80");
+    assert_eq!(v[0]["auto"], true);
+    assert_eq!(v[1]["kind"], "socks");
+    assert_eq!(v[1]["running"], false);
+    env.cmd()
+        .args(["fwd", "rm", "web-2", "nope"])
+        .assert()
+        .code(2);
+    env.cmd()
+        .args(["fwd", "rm", "web-2", "socks"])
+        .assert()
+        .success();
+    let text = std::fs::read_to_string(env.config_file()).unwrap();
+    assert!(text.contains("name = \"app\"") && !text.contains("name = \"socks\""));
+    // connect --with-forwards adds auto forwards.
+    let log = fake_bin(&env, "tmux");
+    env.cmd()
+        .env("PATH", path_with(&env))
+        .env("TMUX", "x")
+        .args(["c", "web-2", "--with-forwards"])
+        .assert()
+        .success();
+    let args = std::fs::read_to_string(log).unwrap();
+    assert!(args.contains("-L\n127.0.0.1:8080:web:80\n"), "{args}");
+}
+
+#[test]
+fn tunnel_up_ls_down() {
+    use std::os::unix::fs::PermissionsExt;
+    let env = Env::new();
+    let fake = env.path().join("fake-ssh");
+    std::fs::write(&fake, "#!/bin/sh\nwhile true; do sleep 1; done\n").unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let port = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        l.local_addr().unwrap().port()
+    };
+    env.write_config(&format!(
+        "[settings]\nssh_bin = \"{}\"\n\n[[server]]\nname = \"db\"\nhost = \"h\"\n\n  [[server.forward]]\n  name = \"pg\"\n  kind = \"local\"\n  local_port = {port}\n  remote = \"localhost:5432\"\n",
+        fake.display()
+    ));
+    env.cmd()
+        .args(["tunnel", "up", "db", "pg"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Tunnel db/pg up"));
+    let out = env.cmd().args(["tunnel", "ls", "--json"]).output().unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v[0]["id"], "db/pg");
+    assert_eq!(v[0]["spec"], format!("-L {port}:localhost:5432"));
+    env.cmd()
+        .args(["tunnel", "up", "db", "pg"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("already running"));
+    env.cmd()
+        .args(["tunnel", "up", "db", "nope"])
+        .assert()
+        .code(2);
+    env.cmd()
+        .args(["tunnel", "down", "--all"])
+        .assert()
+        .success();
+    let out = env.cmd().args(["tunnel", "ls", "--json"]).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "[]");
+}
