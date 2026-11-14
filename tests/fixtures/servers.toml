@@ -1,0 +1,36 @@
+# Fixture used by CLI tests.
+[settings]
+launch = "auto"
+
+[[server]]
+name = "bastion"
+host = "203.0.113.10"
+user = "ata"
+port = 22
+key = "~/.ssh/id_ed25519"
+group = "work"
+tags = ["infra"]
+note = "Main jump box"
+
+[[server]]
+name = "db-prod"
+host = "10.0.0.5"
+user = "postgres"
+jump = ["bastion"]
+tags = ["db", "prod"]
+favorite = true
+extra_args = ["-o", "ServerAliveInterval=30"]
+
+  [[server.forward]]
+  name = "pg"
+  kind = "local"
+  bind = "127.0.0.1"
+  local_port = 5432
+  remote = "localhost:5432"
+  auto = false
+
+[[server]]
+name = "web-2"
+host = "web2.example.com"
+group = "work"
+tags = ["web"]

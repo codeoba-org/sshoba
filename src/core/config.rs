@@ -11,22 +11,17 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use toml_edit::{DocumentMut, Item, Table};
 
-pub const TEMPLATE: &str = r#"# shhoba server list. Edit by hand or with `shhoba add` / the TUI.
-# Docs: https://github.com/ataatasoy/shhoba#configuration
+pub const TEMPLATE: &str = r#"# shhoba server list. Edit by hand, with `shhoba add`, or in the TUI.
+# Add servers as [[server]] tables below the settings.
 
 [settings]
-# launch = "auto"          # auto | tmux | zellij | current
-# stay_open = true          # keep TUI open after opening a tab in a multiplexer
-# ping_interval = 30        # seconds; 0 disables auto ping
-# ping_timeout_ms = 1500
-# transfer_tool = "auto"    # auto | rsync | scp
-# control_master = true     # reuse connections via ControlMaster
-# ssh_bin = "ssh"           # override path if needed
-
-# [[server]]
-# name = "web"
-# host = "203.0.113.10"
-# user = "me"
+launch = "auto"          # auto | tmux | zellij | current
+stay_open = true         # keep the TUI open after opening a tab in a multiplexer
+ping_interval = 30       # seconds; 0 disables auto ping
+ping_timeout_ms = 1500
+transfer_tool = "auto"   # auto | rsync | scp
+control_master = true    # reuse connections via ControlMaster
+ssh_bin = "ssh"          # override the ssh path if needed
 "#;
 
 /// Returns true if `name` is a valid server name.
@@ -361,6 +356,107 @@ fn merge_table(old: &mut Table, new: &Table) {
     }
 }
 
+/// 1-based line of `name = "<server>"` in `text`, for opening an editor there.
+pub fn server_line(text: &str, server: &str) -> Option<usize> {
+    let needle = format!("\"{server}\"");
+    text.lines()
+        .position(|l| {
+            let t = l.trim_start();
+            t.starts_with("name") && t.contains(&needle) && t[4..].trim_start().starts_with('=')
+        })
+        .map(|i| i + 1)
+}
+
+/// The editor command from `$VISUAL` / `$EDITOR`, falling back to `vi`.
+fn editor_command() -> Vec<String> {
+    let raw = std::env::var("VISUAL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            std::env::var("EDITOR")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+        })
+        .unwrap_or_else(|| "vi".into());
+    raw.split_whitespace().map(String::from).collect()
+}
+
+/// Arguments that open `file` at `line` for common editors.
+fn editor_args(editor: &str, file: &Path, line: Option<usize>) -> Vec<String> {
+    let f = file.display().to_string();
+    let base = Path::new(editor)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match line {
+        Some(n) if matches!(base.as_str(), "code" | "codium" | "cursor") => {
+            vec!["--wait".into(), "--goto".into(), format!("{f}:{n}")]
+        }
+        Some(n) if matches!(base.as_str(), "hx" | "helix" | "subl" | "zed") => {
+            vec![format!("{f}:{n}")]
+        }
+        Some(n)
+            if matches!(
+                base.as_str(),
+                "vi" | "vim" | "nvim" | "nano" | "emacs" | "micro" | "kak" | "mg" | "joe"
+            ) =>
+        {
+            vec![format!("+{n}"), f]
+        }
+        _ => vec![f],
+    }
+}
+
+/// Edit servers.toml in the user's editor. Edits go to a temporary copy; on close it is
+/// validated and atomically saved. On a validation error `reopen` decides whether to
+/// open the editor again (true) or abandon the edit (false, original file untouched).
+/// Returns whether the file changed.
+pub fn edit_in_editor(
+    path: &Path,
+    server: Option<&str>,
+    reopen: &mut dyn FnMut(&Error) -> bool,
+) -> Result<bool> {
+    let original = std::fs::read_to_string(path)
+        .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
+    let tmp = path.with_file_name(format!(".{}.edit.toml", file_label(path)));
+    write_atomic(&tmp, original.as_bytes(), 0o600, false)?;
+    let line = server.and_then(|s| server_line(&original, s));
+    let cmd = editor_command();
+    let result = loop {
+        let status = std::process::Command::new(&cmd[0])
+            .args(&cmd[1..])
+            .args(editor_args(&cmd[0], &tmp, line))
+            .status();
+        match status {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                break Err(Error::MissingBinary {
+                    bin: cmd[0].clone(),
+                    hint: "set $EDITOR to your editor".into(),
+                })
+            }
+            Err(e) => break Err(Error::io(format!("run {}", cmd[0]), e)),
+            Ok(_) => {}
+        }
+        let text = match std::fs::read_to_string(&tmp) {
+            Ok(t) => t,
+            Err(e) => break Err(Error::io(format!("read {}", tmp.display()), e)),
+        };
+        if text == original {
+            break Ok(false);
+        }
+        match ConfigStore::from_text(path, &text) {
+            Ok(_) => break write_atomic(path, text.as_bytes(), 0o600, true).map(|_| true),
+            Err(e) => {
+                if !reopen(&e) {
+                    break Err(e);
+                }
+            }
+        }
+    };
+    let _ = std::fs::remove_file(&tmp);
+    result
+}
+
 // ---------------------------------------------------------------------------
 // Pure edit operations on a Config. Callers save the result with ConfigStore::save.
 
@@ -669,6 +765,20 @@ host = "h"
         .unwrap_err();
         assert_eq!(e.exit_code(), 4);
         assert!(e.to_string().contains("hostname"));
+    }
+
+    #[test]
+    fn finds_server_line() {
+        assert_eq!(server_line(SAMPLE, "db-prod"), Some(12));
+        assert_eq!(server_line(SAMPLE, "nope"), None);
+        assert_eq!(
+            editor_args("nvim", Path::new("/c.toml"), Some(3)),
+            ["+3", "/c.toml"]
+        );
+        assert_eq!(
+            editor_args("/usr/bin/code", Path::new("/c.toml"), Some(3)),
+            ["--wait", "--goto", "/c.toml:3"]
+        );
     }
 
     #[test]

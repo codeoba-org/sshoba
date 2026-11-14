@@ -1,0 +1,76 @@
+---
+source: tests/cli.rs
+expression: v
+---
+[
+  {
+    "connect_count": 0,
+    "extra_args": [],
+    "favorite": false,
+    "forwards": [],
+    "group": "work",
+    "host": "203.0.113.10",
+    "jump": [],
+    "key": "~/.ssh/id_ed25519",
+    "last_connected": null,
+    "name": "bastion",
+    "note": "Main jump box",
+    "port": 22,
+    "tags": [
+      "infra"
+    ],
+    "user": "ata"
+  },
+  {
+    "connect_count": 0,
+    "extra_args": [
+      "-o",
+      "ServerAliveInterval=30"
+    ],
+    "favorite": true,
+    "forwards": [
+      {
+        "auto": false,
+        "bind": "127.0.0.1",
+        "kind": "local",
+        "local_port": 5432,
+        "name": "pg",
+        "remote": "localhost:5432",
+        "spec": "127.0.0.1:5432:localhost:5432"
+      }
+    ],
+    "group": null,
+    "host": "10.0.0.5",
+    "jump": [
+      "bastion"
+    ],
+    "key": null,
+    "last_connected": null,
+    "name": "db-prod",
+    "note": null,
+    "port": null,
+    "tags": [
+      "db",
+      "prod"
+    ],
+    "user": "postgres"
+  },
+  {
+    "connect_count": 0,
+    "extra_args": [],
+    "favorite": false,
+    "forwards": [],
+    "group": "work",
+    "host": "web2.example.com",
+    "jump": [],
+    "key": null,
+    "last_connected": null,
+    "name": "web-2",
+    "note": null,
+    "port": null,
+    "tags": [
+      "web"
+    ],
+    "user": null
+  }
+]
