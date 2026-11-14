@@ -10,23 +10,23 @@ class Sshoba < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/codeoba-org/sshoba/releases/download/v1.0.0/sshoba-v1.0.0-aarch64-apple-darwin.tar.gz"
-      sha256 "adb9a9dd127fbffdfb6bacf395ed709c45115335c49128f7eacd7a8bf5a5185d"
+      url "https://github.com/codeoba-org/sshoba/releases/download/v1.1.0/sshoba-v1.1.0-aarch64-apple-darwin.tar.gz"
+      sha256 "671e657410c8a346c41c6f8d1b8041da0e35edf653aa1cc15238f787e91a0c4a"
     end
     on_intel do
-      url "https://github.com/codeoba-org/sshoba/releases/download/v1.0.0/sshoba-v1.0.0-x86_64-apple-darwin.tar.gz"
-      sha256 "d6e89b86e843058199a69789ffbf862e8f7a3b30de2fc984a9704e2ef7d53eb4"
+      url "https://github.com/codeoba-org/sshoba/releases/download/v1.1.0/sshoba-v1.1.0-x86_64-apple-darwin.tar.gz"
+      sha256 "4bf5e6c9235e05a2a33291ec75b61b38a69e15c77d6ac72e2fa7c85a1a57f1e8"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/codeoba-org/sshoba/releases/download/v1.0.0/sshoba-v1.0.0-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "47d8bcde3c562afebecd132879c004211455ceba21ad369d76b0ea1f646e994f"
+      url "https://github.com/codeoba-org/sshoba/releases/download/v1.1.0/sshoba-v1.1.0-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "af3e257b40236e87f7c1eae7db6351928e3f750455fa6a4848b8ce0ad3bf9cf3"
     end
     on_intel do
-      url "https://github.com/codeoba-org/sshoba/releases/download/v1.0.0/sshoba-v1.0.0-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "0919b3813563de7b02feeee874fbfa1b842a459c434e391988a64705c0ebba68"
+      url "https://github.com/codeoba-org/sshoba/releases/download/v1.1.0/sshoba-v1.1.0-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "502653e3b3c035508faef13216c8f033e2543abad406884fec8f37ec44ef1472"
     end
   end
 
