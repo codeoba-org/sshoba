@@ -123,3 +123,16 @@ Choices made where the build plan was silent or left a question open.
 - The local pane starts in the directory shhoba was launched from.
 - `c` copies marked entries, or the highlighted one when nothing is marked. Symlinks can
   be entered like directories (the remote side decides whether `cd` works).
+
+## Export, terminals, clipboard
+
+- `export ssh-config` writes plain aliases without the ControlMaster block, saved
+  forwards or `Include` lines: the file is meant to be included from `~/.ssh/config`,
+  and adding forwards to every plain `ssh <name>` would surprise.
+- Clash detection ignores the `Include` line that points at the exported file itself.
+- kitty and WezTerm are detected after tmux and Zellij (`$KITTY_WINDOW_ID`,
+  `$WEZTERM_PANE`) and count as tab targets for `--tab` and `launch = "auto"`.
+- `y` copies the readable `-J` command (the one shown in the details pane) so it can be
+  pasted on another machine; `shhoba cmd` prints the exact `-F` form.
+- The empty-state hint says `I` (not `i`) to import, because `i` toggles the details
+  pane.

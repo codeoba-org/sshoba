@@ -166,6 +166,11 @@ pub enum Command {
         #[arg(required = true, value_name = "PATH")]
         paths: Vec<String>,
     },
+    /// Export servers to another format.
+    Export {
+        #[command(subcommand)]
+        command: ExportCommand,
+    },
     /// Import servers from another format.
     Import {
         #[command(subcommand)]
@@ -244,6 +249,16 @@ pub enum TunnelCommand {
     Ls {
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ExportCommand {
+    /// Write an ssh config include file (default ~/.ssh/config.d/shhoba) so plain
+    /// `ssh <name>` works. Prints the Include line to add; never edits ~/.ssh/config.
+    SshConfig {
+        #[arg(long, value_name = "F")]
+        file: Option<PathBuf>,
     },
 }
 

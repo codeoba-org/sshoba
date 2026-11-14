@@ -306,7 +306,7 @@ fn tab_without_multiplexer_fails() {
         .args(["c", "web-2", "--tab"])
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("tmux or Zellij"));
+        .stderr(predicate::str::contains("tmux, Zellij"));
 }
 
 #[test]
@@ -553,4 +553,23 @@ fn send_and_get_with_spaces_via_rsync() {
         .assert()
         .code(2)
         .stderr(predicate::str::contains("does-not-exist.txt"));
+}
+
+#[test]
+fn export_ssh_config_to_file() {
+    let env = Env::new();
+    env.write_config(FIXTURE);
+    let out_file = env.path().join("out").join("shhoba");
+    env.cmd()
+        .args(["export", "ssh-config", "--file"])
+        .arg(&out_file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "Include {}",
+            out_file.display()
+        )));
+    let text = std::fs::read_to_string(&out_file).unwrap();
+    assert!(text.contains("Host db-prod\n"));
+    assert!(text.contains("ProxyJump bastion"));
 }

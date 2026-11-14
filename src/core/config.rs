@@ -15,7 +15,7 @@ pub const TEMPLATE: &str = r#"# shhoba server list. Edit by hand, with `shhoba a
 # Add servers as [[server]] tables below the settings.
 
 [settings]
-launch = "auto"          # auto | tmux | zellij | current
+launch = "auto"          # auto | tmux | zellij | kitty | wezterm | current
 stay_open = true         # keep the TUI open after opening a tab in a multiplexer
 ping_interval = 30       # seconds; 0 disables auto ping
 ping_timeout_ms = 1500

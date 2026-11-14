@@ -291,6 +291,77 @@ pub fn import_file(file: &Path, ssh_dir: &Path, cfg: &Config) -> Result<ImportRe
     Ok(report)
 }
 
+/// Result of `export ssh-config`.
+#[derive(Debug, PartialEq)]
+pub struct ExportReport {
+    pub file: PathBuf,
+    /// Server names that also appear as `Host` aliases in the user's ssh config.
+    pub clashes: Vec<String>,
+}
+
+/// Default export target: `~/.ssh/config.d/shhoba`.
+pub fn default_export_file() -> PathBuf {
+    ssh_dir().join("config.d").join("shhoba")
+}
+
+/// `Host` aliases defined in an ssh config (following Includes), skipping `exclude`.
+fn user_aliases(config: &Path, ssh_dir: &Path, exclude: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(config) else {
+        return Vec::new();
+    };
+    // Drop Include lines that point at our own export so we don't clash with ourselves.
+    let filtered: String = text
+        .lines()
+        .filter(|l| {
+            let t = l.trim_start().to_lowercase();
+            !(t.starts_with("include")
+                && l.split_whitespace()
+                    .skip(1)
+                    .flat_map(|a| expand_include(a, ssh_dir))
+                    .any(|p| p == exclude))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    parse_blocks(&filtered, ssh_dir, true)
+        .into_iter()
+        .flat_map(|b| b.patterns)
+        .collect()
+}
+
+/// Write an ssh config include file with plain aliases (`Host db-prod`). Never touches
+/// `~/.ssh/config` itself.
+pub fn export(
+    cfg: &Config,
+    file: &Path,
+    user_config: &Path,
+    ssh_dir: &Path,
+) -> Result<ExportReport> {
+    let text = crate::core::sshcmd::render_ssh_config(
+        cfg,
+        &crate::core::sshcmd::RenderOpts {
+            prefix: "",
+            control_dir: None,
+            include_defaults: false,
+        },
+    );
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| Error::io(format!("create {}", dir.display()), e))?;
+    }
+    crate::core::fsutil::write_atomic(file, text.as_bytes(), 0o600, false)?;
+    let aliases = user_aliases(user_config, ssh_dir, file);
+    let clashes = cfg
+        .server
+        .iter()
+        .filter(|s| aliases.contains(&s.name))
+        .map(|s| s.name.clone())
+        .collect();
+    Ok(ExportReport {
+        file: file.to_path_buf(),
+        clashes,
+    })
+}
+
 /// Default `~/.ssh` directory.
 pub fn ssh_dir() -> PathBuf {
     PathBuf::from(shellexpand::tilde("~/.ssh").into_owned())
@@ -311,6 +382,35 @@ mod tests {
             Some(("identityfile".into(), vec!["~/my keys/id".into()]))
         );
         assert_eq!(tokenize("# comment"), None);
+    }
+
+    #[test]
+    fn export_writes_file_and_reports_clashes() {
+        let dir = tempfile::tempdir().unwrap();
+        let ssh = dir.path();
+        let out = ssh.join("config.d").join("shhoba");
+        std::fs::write(
+            ssh.join("config"),
+            "Include config.d/shhoba\nHost web\n  HostName other\n",
+        )
+        .unwrap();
+        let cfg = crate::core::config::parse(
+            "[[server]]\nname=\"web\"\nhost=\"1.2.3.4\"\n[[server]]\nname=\"db\"\nhost=\"10.0.0.5\"\njump=[\"web\"]\n",
+            "t",
+        )
+        .unwrap();
+        // First export, then again: our own file must not count as a clash.
+        export(&cfg, &out, &ssh.join("config"), ssh).unwrap();
+        let r = export(&cfg, &out, &ssh.join("config"), ssh).unwrap();
+        assert_eq!(r.clashes, ["web"]);
+        let text = std::fs::read_to_string(&out).unwrap();
+        assert!(text.contains("Host db\n") && text.contains("ProxyJump web"));
+        assert!(!text.contains("Host shhoba."));
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&out).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
     }
 
     #[test]

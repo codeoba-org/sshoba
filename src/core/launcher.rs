@@ -12,6 +12,8 @@ use std::process::Command;
 pub enum Env {
     Tmux,
     Zellij,
+    Kitty,
+    Wezterm,
     Plain,
 }
 
@@ -20,6 +22,8 @@ impl Env {
         match self {
             Env::Tmux => "tmux",
             Env::Zellij => "zellij",
+            Env::Kitty => "kitty",
+            Env::Wezterm => "wezterm",
             Env::Plain => "terminal",
         }
     }
@@ -47,12 +51,17 @@ fn env_set(var: &str) -> bool {
     std::env::var_os(var).is_some_and(|v| !v.is_empty())
 }
 
-/// The multiplexer we are running inside, if any. tmux wins when both are set.
+/// The multiplexer (or tab-capable terminal) we are running inside, if any.
+/// Order: tmux, Zellij, kitty, WezTerm.
 pub fn detect_multiplexer() -> Option<Env> {
     if env_set("TMUX") {
         Some(Env::Tmux)
     } else if env_set("ZELLIJ") {
         Some(Env::Zellij)
+    } else if env_set("KITTY_WINDOW_ID") {
+        Some(Env::Kitty)
+    } else if env_set("WEZTERM_PANE") {
+        Some(Env::Wezterm)
     } else {
         None
     }
@@ -64,6 +73,8 @@ pub fn detect_env(launch: LaunchSetting) -> Env {
         LaunchSetting::Tmux => Env::Tmux,
         LaunchSetting::Zellij => Env::Zellij,
         LaunchSetting::Current => Env::Plain,
+        LaunchSetting::Kitty => Env::Kitty,
+        LaunchSetting::Wezterm => Env::Wezterm,
         LaunchSetting::Auto => detect_multiplexer().unwrap_or(Env::Plain),
     }
 }
@@ -73,7 +84,7 @@ pub fn target(launch: LaunchSetting, mode: LaunchMode) -> Result<Target> {
         LaunchMode::Here => Ok(Target::Here),
         LaunchMode::Tab => match detect_env(launch) {
             Env::Plain => detect_multiplexer().map(Target::Tab).ok_or_else(|| {
-                Error::other("--tab needs tmux or Zellij, but neither is running here")
+                Error::other("--tab needs tmux, Zellij, kitty or WezTerm, but none is running here")
             }),
             env => Ok(Target::Tab(env)),
         },
@@ -125,6 +136,21 @@ pub fn tmux_args(name: &str, argv: &[String]) -> Vec<String> {
         .iter()
         .map(|s| s.to_string())
         .collect();
+    v.extend(argv.iter().cloned());
+    v
+}
+
+pub fn kitty_args(name: &str, argv: &[String]) -> Vec<String> {
+    let mut v: Vec<String> = ["@", "launch", "--type=tab", "--tab-title", name]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    v.extend(argv.iter().cloned());
+    v
+}
+
+pub fn wezterm_args(argv: &[String]) -> Vec<String> {
+    let mut v: Vec<String> = vec!["cli".into(), "spawn".into(), "--".into()];
     v.extend(argv.iter().cloned());
     v
 }
@@ -203,6 +229,16 @@ pub fn open_tab(env: Env, name: &str, argv: &[String], paths: &Paths) -> Result<
                 "install Zellij or set launch = \"current\"",
             )
         }
+        Env::Kitty => run_checked(
+            "kitty",
+            &kitty_args(name, argv),
+            "kitty needs allow_remote_control in kitty.conf, or set launch = \"current\"",
+        ),
+        Env::Wezterm => run_checked(
+            "wezterm",
+            &wezterm_args(argv),
+            "install WezTerm's CLI or set launch = \"current\"",
+        ),
         Env::Plain => Err(Error::other("open_tab called without a multiplexer")),
     }
 }
@@ -256,6 +292,31 @@ mod tests {
                 "/x y/c",
                 "shhoba.db"
             ]
+        );
+    }
+
+    #[test]
+    fn terminal_tab_argv() {
+        let argv = vec!["ssh".into(), "shhoba.db".into()];
+        assert_eq!(
+            kitty_args("db", &argv),
+            [
+                "@",
+                "launch",
+                "--type=tab",
+                "--tab-title",
+                "db",
+                "ssh",
+                "shhoba.db"
+            ]
+        );
+        assert_eq!(
+            wezterm_args(&argv),
+            ["cli", "spawn", "--", "ssh", "shhoba.db"]
+        );
+        assert_eq!(
+            target(LaunchSetting::Kitty, LaunchMode::Auto).unwrap(),
+            Target::Tab(Env::Kitty)
         );
     }
 

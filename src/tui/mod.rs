@@ -1,6 +1,7 @@
 //! Terminal UI front end: terminal setup/teardown and the main loop.
 
 pub mod app;
+pub mod clipboard;
 pub mod event;
 pub mod input;
 pub mod keys;
@@ -122,6 +123,11 @@ async fn main_loop(paths: Paths, store: ConfigStore) -> Result<Exit> {
             None => {}
             Some(Action::Quit) => break Ok(Exit::Quit),
             Some(Action::Exec(argv)) => break Ok(Exit::Exec(argv)),
+            Some(Action::Copy(text)) => {
+                let seq = clipboard::osc52(&text, std::env::var_os("TMUX").is_some());
+                let mut out = std::io::stdout();
+                let _ = out.write_all(seq.as_bytes()).and_then(|_| out.flush());
+            }
             Some(Action::Editor(name)) => {
                 input.pause();
                 restore();

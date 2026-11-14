@@ -41,6 +41,8 @@ impl Env {
             .env("NO_COLOR", "1")
             .env_remove("TMUX")
             .env_remove("ZELLIJ")
+            .env_remove("KITTY_WINDOW_ID")
+            .env_remove("WEZTERM_PANE")
             .env_remove("COMPLETE");
         c
     }

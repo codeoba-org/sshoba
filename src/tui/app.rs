@@ -25,6 +25,8 @@ pub enum Action {
     Exec(Vec<String>),
     /// Suspend the TUI and open servers.toml in $EDITOR at this server.
     Editor(Option<String>),
+    /// Put this text on the clipboard (OSC 52).
+    Copy(String),
 }
 
 /// A visible row of the server list.
@@ -796,7 +798,13 @@ impl App {
                 }
             }
             Cmd::Files => self.open_files(),
-            Cmd::CopyCommand => self.warn("Not available yet"),
+            Cmd::CopyCommand => {
+                if let Some(s) = self.selected_server() {
+                    let cmd = crate::core::sshcmd::human_command(s, self.config());
+                    self.info(format!("Copied: {cmd}"));
+                    return Some(Action::Copy(cmd));
+                }
+            }
             Cmd::SwitchPane
             | Cmd::Open
             | Cmd::ParentDir

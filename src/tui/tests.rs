@@ -560,3 +560,15 @@ fn file_browser_lists_and_copies_both_ways() {
     key(&mut h.app, KeyCode::Esc);
     assert!(matches!(h.app.screen, Screen::Main));
 }
+
+#[test]
+fn y_copies_readable_command() {
+    let mut h = harness(FIXTURE);
+    h.app.select_server("db-prod");
+    assert_eq!(
+        key(&mut h.app, KeyCode::Char('y')),
+        Some(Action::Copy(
+            "ssh -J ata@203.0.113.10 postgres@10.0.0.5".into()
+        ))
+    );
+}

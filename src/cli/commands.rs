@@ -1,7 +1,9 @@
 //! One function per subcommand. Each loads what it needs and calls core.
 
 use crate::cli::output::{self, paint, print_json, ServerJson, ShowJson, Style, Table};
-use crate::cli::{Cli, Command, ConfigCommand, FwdCommand, ImportCommand, Shell, TunnelCommand};
+use crate::cli::{
+    Cli, Command, ConfigCommand, ExportCommand, FwdCommand, ImportCommand, Shell, TunnelCommand,
+};
 use crate::core::config::{self, ConfigStore};
 use crate::core::error::{suggest, Error, Result};
 use crate::core::launcher::{self, LaunchMode, Target};
@@ -117,6 +119,9 @@ fn dispatch(ctx: &Ctx, cmd: Command) -> Result<i32> {
         Command::Send { server, paths } => transfer_cmd(ctx, &server, Direction::Send, paths),
         Command::Get { server, paths } => transfer_cmd(ctx, &server, Direction::Get, paths),
         Command::Tunnel { command } => tunnel(ctx, command),
+        Command::Export {
+            command: ExportCommand::SshConfig { file },
+        } => export_ssh_config(ctx, file),
         Command::Import {
             command: ImportCommand::SshConfig { file, dry_run },
         } => import_ssh_config(ctx, file, dry_run),
@@ -800,5 +805,34 @@ fn transfer_cmd(ctx: &Ctx, server: &str, dir: Direction, paths: Vec<String>) -> 
     if show {
         eprintln!("\r\x1b[2KDone.");
     }
+    Ok(0)
+}
+
+fn export_ssh_config(ctx: &Ctx, file: Option<std::path::PathBuf>) -> Result<i32> {
+    use crate::core::sshconfig;
+    let store = ctx.store()?;
+    let file = file.unwrap_or_else(sshconfig::default_export_file);
+    let dir = sshconfig::ssh_dir();
+    let report = sshconfig::export(&store.config, &file, &dir.join("config"), &dir)?;
+    ctx.note(format!(
+        "Wrote {} server(s) to {}",
+        store.config.server.len(),
+        report.file.display()
+    ));
+    if !report.clashes.is_empty() {
+        eprintln!(
+            "{} these names are also Host entries in ~/.ssh/config: {}. ssh uses whichever block comes first.",
+            paint("warning:", Style::Yellow),
+            report.clashes.join(", ")
+        );
+    }
+    let home = shellexpand::tilde("~").into_owned();
+    let shown = report.file.display().to_string();
+    let shown = shown
+        .strip_prefix(&home)
+        .map(|rest| format!("~{rest}"))
+        .unwrap_or(shown);
+    println!("Add this line at the top of ~/.ssh/config:");
+    println!("Include {shown}");
     Ok(0)
 }

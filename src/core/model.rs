@@ -38,6 +38,8 @@ pub enum LaunchSetting {
     Tmux,
     Zellij,
     Current,
+    Kitty,
+    Wezterm,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
