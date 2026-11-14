@@ -20,16 +20,15 @@ because ssh asks in the terminal).
 
 ## Install
 
-```bash
-brew install codeoba-org/tap/shhoba
-```
+Build from source with a Rust toolchain (1.85 or newer):
 
 ```bash
-cargo install shhoba
+cargo install --locked --git https://github.com/codeoba-org/sshoba
 ```
 
-Or download a binary for your platform from the
-[releases page](https://github.com/codeoba-org/sshoba/releases).
+Prebuilt binaries, a Homebrew tap and a crates.io release are not published yet.
+Maintainers: [packaging/homebrew/shhoba.rb](packaging/homebrew/shhoba.rb) is the formula
+to put in a `codeoba-org/homebrew-tap` repository once release binaries exist.
 
 Requirements: OpenSSH (`ssh`). Optional: `rsync` (preferred for transfers), `scp`,
 `tmux` / `zellij` / kitty / WezTerm for tabs.
