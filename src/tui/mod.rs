@@ -52,7 +52,7 @@ fn restore() {
 /// Run the TUI; returns the process exit code.
 pub fn run(paths: &Paths) -> i32 {
     if !std::io::stdout().is_terminal() || !std::io::stdin().is_terminal() {
-        eprintln!("error: the TUI needs a terminal; see `shhoba --help` for commands");
+        eprintln!("error: the TUI needs a terminal; see `sshoba --help` for commands");
         return 1;
     }
     let store = match ConfigStore::load(&paths.config_file) {

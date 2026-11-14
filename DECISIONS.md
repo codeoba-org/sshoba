@@ -16,17 +16,17 @@ Choices made where the build plan was silent or left a question open.
 - **`toml_edit` round-tripping works.** Saves merge changes into the parsed document:
   unchanged servers are left byte-for-byte, changed servers keep their comments and key
   order, new servers/forwards are appended after the last table. Comments are only lost
-  on lines whose value shhoba itself changed (the value is replaced, its trailing comment
-  is kept). Shhoba never rewrites `[settings]`.
+  on lines whose value sshoba itself changed (the value is replaced, its trailing comment
+  is kept). Sshoba never rewrites `[settings]`.
 - **Unknown keys are errors** (`deny_unknown_fields`), so typos like `hostname = ...`
   are caught with a line number instead of being silently ignored.
 - **First-run template** writes `[settings]` with every default value and an explanatory
   comment, rather than commented-out keys: comments in an otherwise empty table end up
   after appended servers in `toml_edit`'s output.
-- **`shhoba edit`** edits a temporary copy, validates it on close and only then replaces
+- **`sshoba edit`** edits a temporary copy, validates it on close and only then replaces
   `servers.toml` atomically (with `.bak`). Declining to reopen after an error leaves the
   original untouched.
-- **`shhoba set <name> name <new>`** is a rename (updates jump references).
+- **`sshoba set <name> name <new>`** is a rename (updates jump references).
   `extra_args` values are split on whitespace; list fields are comma-separated; an empty
   value clears an optional field.
 
@@ -39,9 +39,9 @@ Choices made where the build plan was silent or left a question open.
   jumps (covered by `tests/sshcmd.rs`). The ProxyCommand fallback was not needed.
 - **`Host *` before the trailing `Include`s.** An `Include` after a `Host` block is
   conditional on that block, so the generated file opens a `Host *` scope first.
-- The user's `~/.ssh/config` `Host` patterns are matched against the `shhoba.<name>`
+- The user's `~/.ssh/config` `Host` patterns are matched against the `sshoba.<name>`
   alias, so per-host settings keyed by the real hostname don't apply; `Host *` settings do.
-- **`shhoba cmd`** prints the exact `ssh -F ... shhoba.<name>` command (runnable as-is);
+- **`sshoba cmd`** prints the exact `ssh -F ... sshoba.<name>` command (runnable as-is);
   `show` prints both it and the readable `-J` form.
 - The readable command expands `~` in key paths so it works when pasted into a shell.
 
@@ -67,7 +67,7 @@ Choices made where the build plan was silent or left a question open.
 
 ## Ping
 
-- `shhoba ping` with no arguments checks every server (same as `--all`). CLI pings are
+- `sshoba ping` with no arguments checks every server (same as `--all`). CLI pings are
   manual checks, so jumped servers are checked through the full chain (`ssh -W`).
 - `P` in the TUI and the automatic refresh check jumped servers via their first hop only;
   `p` runs the full chain check for the selected server.
@@ -120,7 +120,7 @@ Choices made where the build plan was silent or left a question open.
   marker line separates the `ls` fallback so a partially failing `find` never produces
   duplicate entries. `pwd` gives the absolute path, so navigation works without
   resolving `~` or symlinks on our side.
-- The local pane starts in the directory shhoba was launched from.
+- The local pane starts in the directory sshoba was launched from.
 - `c` copies marked entries, or the highlighted one when nothing is marked. Symlinks can
   be entered like directories (the remote side decides whether `cd` works).
 
@@ -133,6 +133,14 @@ Choices made where the build plan was silent or left a question open.
 - kitty and WezTerm are detected after tmux and Zellij (`$KITTY_WINDOW_ID`,
   `$WEZTERM_PANE`) and count as tab targets for `--tab` and `launch = "auto"`.
 - `y` copies the readable `-J` command (the one shown in the details pane) so it can be
-  pasted on another machine; `shhoba cmd` prints the exact `-F` form.
+  pasted on another machine; `sshoba cmd` prints the exact `-F` form.
 - The empty-state hint says `I` (not `i`) to import, because `i` toggles the details
   pane.
+
+## Name
+
+- The project, crate and binary are `sshoba`, matching the repository. The build plan
+  spelled it `shhoba`, and v1.0.0 shipped under that name; 1.0.1 renames everything
+  (binary, `~/.config/sshoba`, `~/.local/state/sshoba`, `SSHOBA_*` variables and the
+  `sshoba.<name>` host aliases in the generated ssh config). There is no automatic
+  migration of `~/.config/shhoba`: move the folder if you used 1.0.0.

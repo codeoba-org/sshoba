@@ -2,7 +2,7 @@
 source: src/tui/tests.rs
 expression: "render(&h.app, 100, 30)"
 ---
- shhoba ─ 3 servers ─ terminal
+ sshoba ─ 3 servers ─ terminal
  / to search
 ╭─────────────────────────────────────────────────────╮╭───────────────────────────────────────────╮
 │  ▾ personal  ╭ Add server ────────────────────────────────────────────────────────╮              │

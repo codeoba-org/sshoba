@@ -131,7 +131,7 @@ pub fn parse_ls(out: &str) -> Vec<Entry> {
         .collect()
 }
 
-const LS_MARKER: &str = "__SHHOBA_LS__";
+const LS_MARKER: &str = "__SSHOBA_LS__";
 
 /// The remote shell command: cd, print the absolute path, then list with GNU find or
 /// fall back to `ls -la`.
@@ -270,7 +270,7 @@ drwxr-xr-x   2 ata  staff    64 Feb 10 08:00 dir\n";
 
     #[test]
     fn listing_with_fallback_marker() {
-        let out = "/home/u\n__SHHOBA_LS__\ntotal 0\n-rw-r--r-- 1 u u 3 Nov 14 12:00 b\ndrwxr-xr-x 2 u u 64 Nov 14 12:00 a\n";
+        let out = "/home/u\n__SSHOBA_LS__\ntotal 0\n-rw-r--r-- 1 u u 3 Nov 14 12:00 b\ndrwxr-xr-x 2 u u 64 Nov 14 12:00 a\n";
         let (cwd, e) = parse_listing(out).unwrap();
         assert_eq!(cwd, "/home/u");
         assert_eq!(e[0].name, "a"); // dirs first

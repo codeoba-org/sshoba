@@ -1,4 +1,4 @@
-# shhoba
+# sshoba
 
 A terminal UI and CLI for managing SSH servers, for macOS and Linux.
 
@@ -6,14 +6,14 @@ Save servers once, then connect, check reachability, run port-forward tunnels an
 files with one keypress or one command.
 
 - **Smart connect**: inside tmux, Zellij, kitty or WezTerm a new tab opens running ssh;
-  otherwise shhoba replaces itself with ssh in the current terminal.
+  otherwise sshoba replaces itself with ssh in the current terminal.
 - **Jump hosts** (ProxyJump chains) where every hop can have its own user, port and key.
 - **Live reachability**: TCP + SSH-banner ping next to every server.
 - **Port forwards** (local, remote, SOCKS) and detached background tunnels.
 - **File transfers** with rsync (or scp) and a two-pane local/remote file browser.
 - Every TUI action is also a CLI command, with `--json` output for scripts.
 
-shhoba never implements SSH itself: it runs your system `ssh`, `scp`, `rsync` and `sftp`,
+sshoba never implements SSH itself: it runs your system `ssh`, `scp`, `rsync` and `sftp`,
 so keys, ssh-agent, `known_hosts`, `~/.ssh/config` and ControlMaster keep working. It
 never edits `~/.ssh/config` and never stores passwords (password logins still work,
 because ssh asks in the terminal).
@@ -23,7 +23,7 @@ because ssh asks in the terminal).
 With Homebrew (macOS and Linux):
 
 ```bash
-brew install codeoba-org/tap/shhoba
+brew install codeoba-org/tap/sshoba
 ```
 
 From source, with a Rust toolchain (1.85 or newer):
@@ -41,35 +41,35 @@ Requirements: OpenSSH (`ssh`). Optional: `rsync` (preferred for transfers), `scp
 ## Quick start
 
 ```bash
-shhoba import ssh-config --dry-run
+sshoba import ssh-config --dry-run
 ```
 
 ```bash
-shhoba import ssh-config
+sshoba import ssh-config
 ```
 
 ```bash
-shhoba add web ata@203.0.113.10 -i ~/.ssh/id_ed25519 --tag prod
+sshoba add web ata@203.0.113.10 -i ~/.ssh/id_ed25519 --tag prod
 ```
 
 ```bash
-shhoba add db db@10.0.0.5 -J web
+sshoba add db db@10.0.0.5 -J web
 ```
 
 ```bash
-shhoba
+sshoba
 ```
 
 In the TUI, pick a server and press `⏎` to connect. Or from the shell:
 
 ```bash
-shhoba c db
+sshoba c db
 ```
 
 ## The TUI
 
 ```
-┌ shhoba ─ 12 servers ─ tmux ──────────────────────── 2 tunnels up ┐
+┌ sshoba ─ 12 servers ─ tmux ──────────────────────── 2 tunnels up ┐
 │ / search: prod_                                                 │
 ├──────────────────────────────────┬─────────────────────────────┤
 │ ▾ work                           │ db-prod            ★        │
@@ -125,33 +125,33 @@ hidden files.
 
 ## CLI reference
 
-Run `shhoba <command> --help` for details. Global flags: `--config <path>` (use another
+Run `sshoba <command> --help` for details. Global flags: `--config <path>` (use another
 servers.toml), `-q` / `--quiet`.
 
 | Command | What it does |
 | --- | --- |
-| `shhoba` | Open the TUI |
-| `shhoba connect <query> [--here \| --tab] [--with-forwards]` (`c`) | Connect |
-| `shhoba list [--tag T] [--group G] [--fav] [--json]` (`ls`) | List servers |
-| `shhoba add <name> <[user@]host[:port]> [-i KEY] [-J a,b] [--tag T]... [--group G] [--note N]` | Add a server |
-| `shhoba edit <name>` | Edit servers.toml in `$EDITOR` at that server; validated on close |
-| `shhoba set <name> <field> <value>` | Change one field (`set db port 2222`; empty value clears) |
-| `shhoba rename <old> <new>` | Rename, updating jump references |
-| `shhoba rm <name> [--force] [-y]` | Delete (refused for a used jump host without `--force`) |
-| `shhoba show <name> [--json]` | Server details, route and ssh commands |
-| `shhoba cmd <name>` | Print the exact ssh command |
-| `shhoba ping [<query>...] [--all] [--json]` | Reachability check |
-| `shhoba fwd add <server> <name> (-L \| -R \| -D) <spec> [--auto]` | Save a forward |
-| `shhoba fwd ls [<server>] [--json]` / `fwd rm <server> <name>` | List / delete forwards |
-| `shhoba tunnel up <server> [<forward>...] [--all]` | Start detached tunnels |
-| `shhoba tunnel down <server> [<forward>...]` / `tunnel down --all` | Stop tunnels |
-| `shhoba tunnel ls [--json]` | Running tunnels |
-| `shhoba send <server> <local>... [<remote_dir>]` | Upload (default remote dir `~`) |
-| `shhoba get <server> <remote>... [<local_dir>]` | Download (default local dir `.`) |
-| `shhoba import ssh-config [--file F] [--dry-run]` | Import Host blocks |
-| `shhoba export ssh-config [--file F]` | Write `~/.ssh/config.d/shhoba` for plain `ssh <name>` |
-| `shhoba config path` | Print config, state and log paths |
-| `shhoba completions <bash\|zsh\|fish>` | Print a completion script |
+| `sshoba` | Open the TUI |
+| `sshoba connect <query> [--here \| --tab] [--with-forwards]` (`c`) | Connect |
+| `sshoba list [--tag T] [--group G] [--fav] [--json]` (`ls`) | List servers |
+| `sshoba add <name> <[user@]host[:port]> [-i KEY] [-J a,b] [--tag T]... [--group G] [--note N]` | Add a server |
+| `sshoba edit <name>` | Edit servers.toml in `$EDITOR` at that server; validated on close |
+| `sshoba set <name> <field> <value>` | Change one field (`set db port 2222`; empty value clears) |
+| `sshoba rename <old> <new>` | Rename, updating jump references |
+| `sshoba rm <name> [--force] [-y]` | Delete (refused for a used jump host without `--force`) |
+| `sshoba show <name> [--json]` | Server details, route and ssh commands |
+| `sshoba cmd <name>` | Print the exact ssh command |
+| `sshoba ping [<query>...] [--all] [--json]` | Reachability check |
+| `sshoba fwd add <server> <name> (-L \| -R \| -D) <spec> [--auto]` | Save a forward |
+| `sshoba fwd ls [<server>] [--json]` / `fwd rm <server> <name>` | List / delete forwards |
+| `sshoba tunnel up <server> [<forward>...] [--all]` | Start detached tunnels |
+| `sshoba tunnel down <server> [<forward>...]` / `tunnel down --all` | Stop tunnels |
+| `sshoba tunnel ls [--json]` | Running tunnels |
+| `sshoba send <server> <local>... [<remote_dir>]` | Upload (default remote dir `~`) |
+| `sshoba get <server> <remote>... [<local_dir>]` | Download (default local dir `.`) |
+| `sshoba import ssh-config [--file F] [--dry-run]` | Import Host blocks |
+| `sshoba export ssh-config [--file F]` | Write `~/.ssh/config.d/sshoba` for plain `ssh <name>` |
+| `sshoba config path` | Print config, state and log paths |
+| `sshoba completions <bash\|zsh\|fish>` | Print a completion script |
 
 `<query>` is an exact name or a fuzzy match on name, host, tags and group. If several
 servers match, a picker appears on a terminal; in scripts the command exits with code 3.
@@ -174,24 +174,24 @@ servers match, a picker appears on a terminal; in scripts the command exits with
 Completions include your server names and forwards.
 
 ```bash
-echo 'source <(shhoba completions bash)' >> ~/.bashrc
+echo 'source <(sshoba completions bash)' >> ~/.bashrc
 ```
 
 ```bash
-echo 'source <(shhoba completions zsh)' >> ~/.zshrc
+echo 'source <(sshoba completions zsh)' >> ~/.zshrc
 ```
 
 ```bash
-shhoba completions fish > ~/.config/fish/completions/shhoba.fish
+sshoba completions fish > ~/.config/fish/completions/sshoba.fish
 ```
 
 ## Configuration
 
-Servers live in `~/.config/shhoba/servers.toml` (also on macOS; override the directory
-with `$SHHOBA_CONFIG_DIR` or `$XDG_CONFIG_HOME`). The file is meant to be edited by hand
-and kept in git: shhoba keeps your comments and ordering when it saves, writes atomically
+Servers live in `~/.config/sshoba/servers.toml` (also on macOS; override the directory
+with `$SSHOBA_CONFIG_DIR` or `$XDG_CONFIG_HOME`). The file is meant to be edited by hand
+and kept in git: sshoba keeps your comments and ordering when it saves, writes atomically
 and keeps a `servers.toml.bak`. Runtime data (last connected, ping cache, running
-tunnels) lives separately in `~/.local/state/shhoba/state.json` (`$XDG_STATE_HOME`).
+tunnels) lives separately in `~/.local/state/sshoba/state.json` (`$XDG_STATE_HOME`).
 
 ```toml
 [settings]
@@ -227,7 +227,7 @@ extra_args = ["-o", "ServerAliveInterval=30"]
   bind = "127.0.0.1"       # optional
   local_port = 5432
   remote = "localhost:5432"  # host:port; omit for socks
-  auto = false             # add to `shhoba c db-prod --with-forwards`
+  auto = false             # add to `sshoba c db-prod --with-forwards`
 ```
 
 Every load and save is validated: unique names, existing jump hosts, no jump cycles
@@ -239,39 +239,39 @@ servers.toml: server "db-prod": jump "bastoin" not found (did you mean "bastion"
 
 ### How connections are made
 
-Before each ssh, scp, rsync or sftp call shhoba regenerates
-`~/.local/state/shhoba/ssh_config` (only when servers.toml changed) and runs
-`ssh -F <that file> shhoba.<name>`. Each server becomes a `Host shhoba.<name>` block,
+Before each ssh, scp, rsync or sftp call sshoba regenerates
+`~/.local/state/sshoba/ssh_config` (only when servers.toml changed) and runs
+`ssh -F <that file> sshoba.<name>`. Each server becomes a `Host sshoba.<name>` block,
 so per-hop users, ports and keys work in jump chains. The file ends with
 `Include ~/.ssh/config` and `Include /etc/ssh/ssh_config`, so your own settings
-(`Host *` defaults, agent, etc.) still apply. `shhoba cmd <name>` prints the exact
-command; `shhoba show <name>` also prints a readable `ssh -J ...` equivalent.
+(`Host *` defaults, agent, etc.) still apply. `sshoba cmd <name>` prints the exact
+command; `sshoba show <name>` also prints a readable `ssh -J ...` equivalent.
 
 To use your servers with plain `ssh <name>` (and other tools), run
-`shhoba export ssh-config` and add the printed `Include` line to the top of
+`sshoba export ssh-config` and add the printed `Include` line to the top of
 `~/.ssh/config`.
 
 ## Logs
 
-shhoba never prints while the TUI is open; it logs to `~/.local/state/shhoba/shhoba.log`.
-Set `SHHOBA_LOG=debug` for more detail. Background tunnels log to
-`~/.local/state/shhoba/tunnels/<server>__<forward>.log`.
+sshoba never prints while the TUI is open; it logs to `~/.local/state/sshoba/sshoba.log`.
+Set `SSHOBA_LOG=debug` for more detail. Background tunnels log to
+`~/.local/state/sshoba/tunnels/<server>__<forward>.log`.
 
 ## FAQ
 
 **My server only accepts passwords. Can I use tunnels?**
 Background tunnels run with `BatchMode=yes`, so they need key or ssh-agent
 authentication. For password servers, mark the forwards `auto = true` and connect with
-`shhoba c <name> --with-forwards` (or `o` in the TUI): the forwards then run inside your
+`sshoba c <name> --with-forwards` (or `o` in the TUI): the forwards then run inside your
 interactive session, where ssh can ask for the password.
 
 **A background command says "host key not verified".**
-Connect once interactively (`shhoba c <name>`) and accept the host key. shhoba never
+Connect once interactively (`sshoba c <name>`) and accept the host key. sshoba never
 disables host key checking.
 
 **Transfers on macOS show per-file progress instead of a total.**
 macOS ships openrsync (compatible with rsync 2.6.9), which lacks `--info=progress2`.
-shhoba detects this and falls back to per-file progress; paths with spaces still work.
+sshoba detects this and falls back to per-file progress; paths with spaces still work.
 Install rsync 3.x (`brew install rsync`) for whole-transfer progress and
 `--protect-args`, or set `transfer_tool = "scp"`.
 
@@ -279,7 +279,7 @@ Install rsync 3.x (`brew install rsync`) for whole-transfer progress and
 `kitty @ launch` needs `allow_remote_control yes` (or `socket-only` with
 `listen_on`) in `kitty.conf`. Otherwise set `launch = "current"`.
 
-**Does shhoba touch `~/.ssh/config`?**
+**Does sshoba touch `~/.ssh/config`?**
 Only reads it (for `import ssh-config`, and through `Include` when connecting). It is
 never written; `export ssh-config` writes a separate file.
 

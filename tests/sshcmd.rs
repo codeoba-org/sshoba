@@ -8,7 +8,7 @@ use common::Env;
 /// the generated file (section 7.1).
 #[test]
 fn ssh_passes_config_file_to_jump_hosts() {
-    if shhoba::core::launcher::which("ssh").is_none() {
+    if sshoba::core::launcher::which("ssh").is_none() {
         eprintln!("ssh not installed; skipping");
         return;
     }
@@ -36,7 +36,7 @@ jump = ["hop"]
         .arg("-F")
         .arg(&file)
         .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=3"])
-        .arg("shhoba.target")
+        .arg("sshoba.target")
         .arg("true")
         .env("HOME", env.path())
         .output()

@@ -299,9 +299,9 @@ pub struct ExportReport {
     pub clashes: Vec<String>,
 }
 
-/// Default export target: `~/.ssh/config.d/shhoba`.
+/// Default export target: `~/.ssh/config.d/sshoba`.
 pub fn default_export_file() -> PathBuf {
-    ssh_dir().join("config.d").join("shhoba")
+    ssh_dir().join("config.d").join("sshoba")
 }
 
 /// `Host` aliases defined in an ssh config (following Includes), skipping `exclude`.
@@ -388,10 +388,10 @@ mod tests {
     fn export_writes_file_and_reports_clashes() {
         let dir = tempfile::tempdir().unwrap();
         let ssh = dir.path();
-        let out = ssh.join("config.d").join("shhoba");
+        let out = ssh.join("config.d").join("sshoba");
         std::fs::write(
             ssh.join("config"),
-            "Include config.d/shhoba\nHost web\n  HostName other\n",
+            "Include config.d/sshoba\nHost web\n  HostName other\n",
         )
         .unwrap();
         let cfg = crate::core::config::parse(
@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(r.clashes, ["web"]);
         let text = std::fs::read_to_string(&out).unwrap();
         assert!(text.contains("Host db\n") && text.contains("ProxyJump web"));
-        assert!(!text.contains("Host shhoba."));
+        assert!(!text.contains("Host sshoba."));
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(
             std::fs::metadata(&out).unwrap().permissions().mode() & 0o777,

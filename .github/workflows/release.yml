@@ -37,15 +37,15 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          name="shhoba-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="sshoba-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir "$name"
-          cp "target/${{ matrix.target }}/release/shhoba" README.md "$name/"
+          cp "target/${{ matrix.target }}/release/sshoba" README.md "$name/"
           tar czf "$name.tar.gz" "$name"
           shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: shhoba-*.tar.gz*
+          path: sshoba-*.tar.gz*
 
   release:
     needs: build
@@ -56,5 +56,5 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: shhoba-*.tar.gz*
+          files: sshoba-*.tar.gz*
           generate_release_notes: true

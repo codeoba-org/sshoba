@@ -98,7 +98,7 @@ impl State {
     }
 
     /// Load the latest state from disk, apply `f`, and save. Use this for every change so
-    /// concurrent shhoba processes do not overwrite each other's updates.
+    /// concurrent sshoba processes do not overwrite each other's updates.
     pub fn update<T>(paths: &Paths, f: impl FnOnce(&mut State) -> T) -> Result<(State, T)> {
         let mut s = State::load(paths);
         let out = f(&mut s);

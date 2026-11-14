@@ -235,7 +235,7 @@ mod tests {
             started_at: chrono::Utc::now(),
             spec: "-L 5432:localhost:5432".into(),
         };
-        // Our own pid exists but is not an ssh tunnel for shhoba.s.
+        // Our own pid exists but is not an ssh tunnel for sshoba.s.
         assert!(!is_alive(&rec));
         rec.pid = 0;
         assert!(!is_alive(&rec));
@@ -298,7 +298,7 @@ mod tests {
         let p = paths(dir.path());
         // A fake "ssh" that stays up like a working tunnel.
         let fake = dir.path().join("fake-ssh");
-        // A shell loop keeps the original argv (`fake-ssh -F ... shhoba.s`) visible.
+        // A shell loop keeps the original argv (`fake-ssh -F ... sshoba.s`) visible.
         std::fs::write(&fake, "#!/bin/sh\nwhile true; do sleep 1; done\n").unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();

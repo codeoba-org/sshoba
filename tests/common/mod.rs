@@ -25,7 +25,7 @@ impl Env {
     }
 
     pub fn state_dir(&self) -> PathBuf {
-        self.path().join("state").join("shhoba")
+        self.path().join("state").join("sshoba")
     }
 
     pub fn write_config(&self, text: &str) {
@@ -34,8 +34,8 @@ impl Env {
     }
 
     pub fn cmd(&self) -> Command {
-        let mut c = Command::cargo_bin("shhoba").unwrap();
-        c.env("SHHOBA_CONFIG_DIR", self.path().join("cfg"))
+        let mut c = Command::cargo_bin("sshoba").unwrap();
+        c.env("SSHOBA_CONFIG_DIR", self.path().join("cfg"))
             .env("XDG_STATE_HOME", self.path().join("state"))
             .env("HOME", self.path().join("home"))
             .env("NO_COLOR", "1")

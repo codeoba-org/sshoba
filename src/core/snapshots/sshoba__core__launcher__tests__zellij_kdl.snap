@@ -5,7 +5,7 @@ expression: zellij_layout(&argv)
 layout {
     pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
     pane command="ssh" close_on_exit=true {
-        args "-F" "/home/u/.local/state/shhoba/ssh_config" "we\"ird\\arg"
+        args "-F" "/home/u/.local/state/sshoba/ssh_config" "we\"ird\\arg"
     }
     pane size=2 borderless=true { plugin location="zellij:status-bar"; }
 }

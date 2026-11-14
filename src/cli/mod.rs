@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "shhoba",
+    name = "sshoba",
     version,
     about = "Manage, connect to and tunnel through SSH servers",
     long_about = "Manage, connect to and tunnel through SSH servers.\n\nRun without a subcommand to open the TUI."
@@ -87,7 +87,7 @@ pub enum Command {
         #[arg(add = servers())]
         name: String,
     },
-    /// Change one field, e.g. `shhoba set db1 port 2222`. An empty value clears it.
+    /// Change one field, e.g. `sshoba set db1 port 2222`. An empty value clears it.
     Set {
         #[arg(add = servers())]
         name: String,
@@ -254,7 +254,7 @@ pub enum TunnelCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum ExportCommand {
-    /// Write an ssh config include file (default ~/.ssh/config.d/shhoba) so plain
+    /// Write an ssh config include file (default ~/.ssh/config.d/sshoba) so plain
     /// `ssh <name>` works. Prints the Include line to add; never edits ~/.ssh/config.
     SshConfig {
         #[arg(long, value_name = "F")]

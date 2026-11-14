@@ -216,7 +216,7 @@ fn list(
         return Ok(0);
     }
     if servers.is_empty() {
-        ctx.note("No servers. Add one with `shhoba add <name> [user@]host[:port]`.");
+        ctx.note("No servers. Add one with `sshoba add <name> [user@]host[:port]`.");
         return Ok(0);
     }
     let mut t = Table::new(&["NAME", "DESTINATION", "GROUP", "TAGS", "VIA"]);
@@ -402,7 +402,7 @@ fn completions(shell: Shell) -> Result<i32> {
     };
     let mut out = std::io::stdout();
     completer
-        .write_registration("COMPLETE", "shhoba", "shhoba", "shhoba", &mut out)
+        .write_registration("COMPLETE", "sshoba", "sshoba", "sshoba", &mut out)
         .map_err(|e| Error::io("write completions", e))?;
     Ok(0)
 }
@@ -613,7 +613,7 @@ fn fwd(ctx: &Ctx, command: FwdCommand) -> Result<i32> {
             if any {
                 print!("{}", t.render());
             } else {
-                ctx.note("No forwards. Add one with `shhoba fwd add <server> <name> -L <spec>`.");
+                ctx.note("No forwards. Add one with `sshoba fwd add <server> <name> -L <spec>`.");
             }
             Ok(0)
         }
@@ -646,7 +646,7 @@ fn pick_forwards<'a>(
         if s.forward.is_empty() {
             return Err(Error::not_found(
                 format!(
-                    "forwards for \"{}\" (add one with `shhoba fwd add`)",
+                    "forwards for \"{}\" (add one with `sshoba fwd add`)",
                     s.name
                 ),
                 None,

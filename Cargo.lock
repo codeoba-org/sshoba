@@ -1659,33 +1659,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shhoba"
-version = "1.0.0"
-dependencies = [
- "assert_cmd",
- "chrono",
- "clap",
- "clap_complete",
- "directories",
- "insta",
- "nix 0.31.3",
- "nucleo-matcher",
- "predicates",
- "ratatui",
- "serde",
- "serde_json",
- "shell-escape",
- "shellexpand",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "toml",
- "toml_edit",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1754,6 +1727,33 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys",
+]
+
+[[package]]
+name = "sshoba"
+version = "1.0.1"
+dependencies = [
+ "assert_cmd",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "directories",
+ "insta",
+ "nix 0.31.3",
+ "nucleo-matcher",
+ "predicates",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "shell-escape",
+ "shellexpand",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "toml_edit",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

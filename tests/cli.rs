@@ -191,9 +191,9 @@ fn cmd_prints_exact_command() {
     assert!(s.starts_with("ssh -F "));
     assert!(s
         .trim_end()
-        .ends_with("-o ServerAliveInterval=30 shhoba.db-prod"));
+        .ends_with("-o ServerAliveInterval=30 sshoba.db-prod"));
     let generated = std::fs::read_to_string(env.state_dir().join("ssh_config")).unwrap();
-    assert!(generated.contains("ProxyJump shhoba.bastion"));
+    assert!(generated.contains("ProxyJump sshoba.bastion"));
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn completions_scripts() {
             .args(["completions", sh])
             .assert()
             .success()
-            .stdout(predicate::str::contains("shhoba"));
+            .stdout(predicate::str::contains("sshoba"));
     }
 }
 
@@ -227,7 +227,7 @@ fn dynamic_completion_lists_servers() {
     let out = env
         .cmd()
         .env("COMPLETE", "fish")
-        .args(["--", "shhoba", "connect", ""])
+        .args(["--", "sshoba", "connect", ""])
         .output()
         .unwrap();
     let s = String::from_utf8_lossy(&out.stdout);
@@ -275,7 +275,7 @@ fn connect_in_tmux_opens_window() {
     let args: Vec<&str> = args.lines().collect();
     assert_eq!(&args[..4], ["new-window", "-n", "db-prod", "--"]);
     assert_eq!(args[4], "ssh");
-    assert_eq!(*args.last().unwrap(), "shhoba.db-prod");
+    assert_eq!(*args.last().unwrap(), "sshoba.db-prod");
     let state = std::fs::read_to_string(env.state_dir().join("state.json")).unwrap();
     assert!(state.contains("\"connect_count\": 1"));
 }
@@ -295,7 +295,7 @@ fn connect_in_zellij_opens_tab() {
     let args: Vec<&str> = args.lines().collect();
     assert_eq!(&args[..4], ["action", "new-tab", "--name", "web-2"]);
     let layout = std::fs::read_to_string(args[5]).unwrap();
-    assert!(layout.contains("\"shhoba.web-2\""));
+    assert!(layout.contains("\"sshoba.web-2\""));
 }
 
 #[test]
@@ -499,14 +499,14 @@ fn tunnel_up_ls_down() {
 #[test]
 fn send_and_get_with_spaces_via_rsync() {
     use std::os::unix::fs::PermissionsExt;
-    if shhoba::core::launcher::which("rsync").is_none() {
+    if sshoba::core::launcher::which("rsync").is_none() {
         return;
     }
     let env = Env::new();
     let remote_home = env.path().join("remote home");
     std::fs::create_dir_all(remote_home.join("up loads")).unwrap();
     let fake = env.path().join("fake-ssh");
-    // argv: -F <file> shhoba.<name> <remote command words...>
+    // argv: -F <file> sshoba.<name> <remote command words...>
     std::fs::write(
         &fake,
         format!(
@@ -559,7 +559,7 @@ fn send_and_get_with_spaces_via_rsync() {
 fn export_ssh_config_to_file() {
     let env = Env::new();
     env.write_config(FIXTURE);
-    let out_file = env.path().join("out").join("shhoba");
+    let out_file = env.path().join("out").join("sshoba");
     env.cmd()
         .args(["export", "ssh-config", "--file"])
         .arg(&out_file)

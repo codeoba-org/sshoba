@@ -160,7 +160,7 @@ fn enter_in_current_mode_execs_ssh() {
     match key(&mut h.app, KeyCode::Enter) {
         Some(Action::Exec(argv)) => {
             assert_eq!(argv[0], "ssh");
-            assert_eq!(argv.last().unwrap(), "shhoba.db-prod");
+            assert_eq!(argv.last().unwrap(), "sshoba.db-prod");
         }
         other => panic!("expected exec, got {other:?}"),
     }
@@ -428,7 +428,7 @@ fn fake_remote_ssh(dir: &std::path::Path, remote: &std::path::Path) -> std::path
     std::fs::write(
         &fake,
         format!(
-            "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in shhoba.*) shift; [ \"$1\" = \"--\" ] && shift; break;; *) shift;; esac; done\nexport HOME='{r}'\ncd '{r}' || exit 1\nexec sh -c \"$*\"\n",
+            "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in sshoba.*) shift; [ \"$1\" = \"--\" ] && shift; break;; *) shift;; esac; done\nexport HOME='{r}'\ncd '{r}' || exit 1\nexec sh -c \"$*\"\n",
             r = remote.display()
         ),
     )

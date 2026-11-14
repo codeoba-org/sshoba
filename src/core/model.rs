@@ -280,7 +280,7 @@ pub fn parse_host_port(s: &str) -> Result<(String, u16), String> {
     Ok((host.to_string(), port))
 }
 
-/// Parse `[user@]host[:port]` as given to `shhoba add`.
+/// Parse `[user@]host[:port]` as given to `sshoba add`.
 pub fn parse_destination(s: &str) -> Result<(Option<String>, String, Option<u16>), String> {
     let (user, rest) = match s.rsplit_once('@') {
         Some((u, r)) if !u.is_empty() => (Some(u.to_string()), r),

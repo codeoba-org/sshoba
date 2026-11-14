@@ -278,7 +278,7 @@ mod tests {
             "ssh".into(),
             "-F".into(),
             "/x y/c".into(),
-            "shhoba.db".into(),
+            "sshoba.db".into(),
         ];
         assert_eq!(
             tmux_args("db", &argv),
@@ -290,14 +290,14 @@ mod tests {
                 "ssh",
                 "-F",
                 "/x y/c",
-                "shhoba.db"
+                "sshoba.db"
             ]
         );
     }
 
     #[test]
     fn terminal_tab_argv() {
-        let argv = vec!["ssh".into(), "shhoba.db".into()];
+        let argv = vec!["ssh".into(), "sshoba.db".into()];
         assert_eq!(
             kitty_args("db", &argv),
             [
@@ -307,12 +307,12 @@ mod tests {
                 "--tab-title",
                 "db",
                 "ssh",
-                "shhoba.db"
+                "sshoba.db"
             ]
         );
         assert_eq!(
             wezterm_args(&argv),
-            ["cli", "spawn", "--", "ssh", "shhoba.db"]
+            ["cli", "spawn", "--", "ssh", "sshoba.db"]
         );
         assert_eq!(
             target(LaunchSetting::Kitty, LaunchMode::Auto).unwrap(),
@@ -325,7 +325,7 @@ mod tests {
         let argv = vec![
             "ssh".into(),
             "-F".into(),
-            "/home/u/.local/state/shhoba/ssh_config".into(),
+            "/home/u/.local/state/sshoba/ssh_config".into(),
             "we\"ird\\arg".into(),
         ];
         insta::assert_snapshot!(zellij_layout(&argv));

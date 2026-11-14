@@ -1,7 +1,7 @@
 //! Load, validate and save servers.toml (sections 4.3 and 4.4).
 //!
 //! Saves merge changes into the parsed `toml_edit` document so comments and ordering
-//! written by the user survive edits made through shhoba.
+//! written by the user survive edits made through sshoba.
 
 use crate::core::error::{suggest, Error, Result};
 use crate::core::fsutil::write_atomic;
@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use toml_edit::{DocumentMut, Item, Table};
 
-pub const TEMPLATE: &str = r#"# shhoba server list. Edit by hand, with `shhoba add`, or in the TUI.
+pub const TEMPLATE: &str = r#"# sshoba server list. Edit by hand, with `sshoba add`, or in the TUI.
 # Add servers as [[server]] tables below the settings.
 
 [settings]
@@ -250,7 +250,7 @@ fn merge_servers(
     Ok(())
 }
 
-/// Give tables created by shhoba (which have no document position) a position right
+/// Give tables created by sshoba (which have no document position) a position right
 /// after the table before them, so new servers and forwards render where they belong.
 fn place_new_tables(doc: &mut DocumentMut) {
     const GAP: isize = 1000;
@@ -565,7 +565,7 @@ pub fn remove_forward(cfg: &mut Config, server: &str, name: &str) -> Result<()> 
     Ok(())
 }
 
-/// Fields accepted by `shhoba set`.
+/// Fields accepted by `sshoba set`.
 pub const SETTABLE_FIELDS: &[&str] = &[
     "name",
     "host",

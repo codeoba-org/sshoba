@@ -2,7 +2,7 @@
 source: src/tui/tests.rs
 expression: "render(&h.app, 100, 8)"
 ---
- shhoba ─ 3 servers ─ terminal
+ sshoba ─ 3 servers ─ terminal
  / search: prod
 ╭─────────────────────────────────────────────────────╮╭───────────────────────────────────────────╮
 │❯   ·       db-prod ★ db prod  via bastion           ││db-prod  ★                                 │

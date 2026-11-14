@@ -1,6 +1,6 @@
 [package]
-name = "shhoba"
-version = "1.0.0"
+name = "sshoba"
+version = "1.0.1"
 edition = "2021"
 description = "A TUI and CLI for managing SSH servers"
 license = "MIT"

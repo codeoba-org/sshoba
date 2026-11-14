@@ -66,7 +66,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     let n = app.config().server.len();
     let left = format!(
-        " shhoba ─ {n} server{} ─ {} ",
+        " sshoba ─ {n} server{} ─ {} ",
         if n == 1 { "" } else { "s" },
         app.env.label()
     );

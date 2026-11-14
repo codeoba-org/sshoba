@@ -13,7 +13,7 @@ expression: "(rsync_args(&ctx(), db, Direction::Send, &srcs, \"~/up loads\", new
         "ssh -F /state/ssh_config",
         "my file.txt",
         "dir",
-        "shhoba.db-prod:up loads",
+        "sshoba.db-prod:up loads",
     ],
     [
         "rsync",
@@ -22,7 +22,7 @@ expression: "(rsync_args(&ctx(), db, Direction::Send, &srcs, \"~/up loads\", new
         "--progress",
         "-e",
         "ssh -F /state/ssh_config",
-        "shhoba.db-prod:'logs/a b.log'",
+        "sshoba.db-prod:'logs/a b.log'",
         ".",
     ],
     [
@@ -32,14 +32,14 @@ expression: "(rsync_args(&ctx(), db, Direction::Send, &srcs, \"~/up loads\", new
         "-r",
         "my file.txt",
         "dir",
-        "shhoba.db-prod:",
+        "sshoba.db-prod:",
     ],
     [
         "scp",
         "-F",
         "/state/ssh_config",
         "-r",
-        "shhoba.db-prod:x y",
+        "sshoba.db-prod:x y",
         "/tmp",
     ],
     [
@@ -48,7 +48,7 @@ expression: "(rsync_args(&ctx(), db, Direction::Send, &srcs, \"~/up loads\", new
         "/state/ssh_config",
         "-b",
         "-",
-        "shhoba.db-prod",
+        "sshoba.db-prod",
     ],
     [
         "ssh",
@@ -60,7 +60,7 @@ expression: "(rsync_args(&ctx(), db, Direction::Send, &srcs, \"~/up loads\", new
         "ConnectTimeout=10",
         "-o",
         "ServerAliveInterval=30",
-        "shhoba.db-prod",
+        "sshoba.db-prod",
         "--",
         "ls -la '/var/log'",
     ],

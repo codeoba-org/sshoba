@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// Resolved locations of every file shhoba reads or writes.
+/// Resolved locations of every file sshoba reads or writes.
 #[derive(Debug, Clone)]
 pub struct Paths {
     pub config_dir: PathBuf,
@@ -25,15 +25,15 @@ fn env_dir(var: &str) -> Option<PathBuf> {
 impl Paths {
     /// Resolve paths from the environment. `config_override` is the `--config` flag.
     pub fn resolve(config_override: Option<&Path>) -> Self {
-        let config_dir = env_dir("SHHOBA_CONFIG_DIR")
-            .or_else(|| env_dir("XDG_CONFIG_HOME").map(|d| d.join("shhoba")))
-            .unwrap_or_else(|| home().join(".config").join("shhoba"));
+        let config_dir = env_dir("SSHOBA_CONFIG_DIR")
+            .or_else(|| env_dir("XDG_CONFIG_HOME").map(|d| d.join("sshoba")))
+            .unwrap_or_else(|| home().join(".config").join("sshoba"));
         let config_file = config_override
             .map(Path::to_path_buf)
             .unwrap_or_else(|| config_dir.join("servers.toml"));
         let state_dir = env_dir("XDG_STATE_HOME")
-            .map(|d| d.join("shhoba"))
-            .unwrap_or_else(|| home().join(".local").join("state").join("shhoba"));
+            .map(|d| d.join("sshoba"))
+            .unwrap_or_else(|| home().join(".local").join("state").join("sshoba"));
         Paths {
             config_dir,
             config_file,
@@ -45,7 +45,7 @@ impl Paths {
         self.state_dir.join("state.json")
     }
     pub fn log_file(&self) -> PathBuf {
-        self.state_dir.join("shhoba.log")
+        self.state_dir.join("sshoba.log")
     }
     pub fn ssh_config(&self) -> PathBuf {
         self.state_dir.join("ssh_config")
